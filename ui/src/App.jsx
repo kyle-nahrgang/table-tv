@@ -1,32 +1,32 @@
-import { useState, useEffect } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Box, CircularProgress, Typography } from '@mui/material'
 
 import { useApiInfo } from './apiInfoStore'
-import { useAuth } from './authStore'
-import { Registration, Login } from './features/admin'
+import { useAuth } from './authStore.jsx'
+import { Registration } from './features/admin'
+import { Layout } from './components/Layout'
+import { Home } from './pages/Home'
+import { Admin } from './pages/Admin'
 
 function App() {
-  const [count, setCount] = useState(0)
-  const [message, setMessage] = useState('')
   const { initialized, loading, retrying, refetch } = useApiInfo()
-  const { isLoggedIn, login, logout } = useAuth()
-
-  useEffect(() => {
-    if (initialized !== true) return
-    fetch('/api/hello')
-      .then((res) => res.text())
-      .then(setMessage)
-      .catch(() => setMessage('Failed to fetch'))
-  }, [initialized])
+  const { isLoggedIn } = useAuth()
 
   if (loading) {
     return (
-      <div className="api-loading">
-        <div className="spinner" aria-hidden />
-        <p className="api-message">{retrying ? 'Connecting... Retrying every 5 seconds.' : 'Loading...'}</p>
-      </div>
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        gap={2}
+        minHeight="100vh"
+      >
+        <CircularProgress />
+        <Typography color="text.secondary">
+          {retrying ? 'Connecting... Retrying every 5 seconds.' : 'Loading...'}
+        </Typography>
+      </Box>
     )
   }
 
@@ -34,39 +34,16 @@ function App() {
     return <Registration onSuccess={refetch} />
   }
 
-  if (!isLoggedIn) {
-    return <Login onSuccess={login} />
-  }
-
   return (
-    <>
-      <div style={{ position: 'absolute', top: 16, right: 16 }}>
-        <button type="button" onClick={logout} style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}>
-          Log out
-        </button>
-      </div>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <p className="api-message">{message || 'Loading...'}</p>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Home />} />
+        <Route path="admin" element={<Admin />} />
+        <Route path="admin/server-settings" element={<Admin />} />
+        <Route path="admin/camera-settings" element={<Admin />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   )
 }
 

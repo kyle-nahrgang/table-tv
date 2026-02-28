@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 
 const AUTH_KEY = 'admin_logged_in'
 
@@ -22,11 +22,9 @@ function setStoredAuth(loggedIn) {
   }
 }
 
-/**
- * Hook that tracks admin login state.
- * @returns {{ isLoggedIn: boolean, login: () => void, logout: () => void }}
- */
-export function useAuth() {
+const AuthContext = createContext(null)
+
+export function AuthProvider({ children }) {
   const [isLoggedIn, setIsLoggedIn] = useState(getStoredAuth)
 
   const login = () => {
@@ -39,7 +37,6 @@ export function useAuth() {
     setIsLoggedIn(false)
   }
 
-  // Sync with other tabs
   useEffect(() => {
     const handler = (e) => {
       if (e.key === AUTH_KEY) {
@@ -50,5 +47,19 @@ export function useAuth() {
     return () => window.removeEventListener('storage', handler)
   }, [])
 
-  return { isLoggedIn, login, logout }
+  return (
+    <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+/**
+ * Hook that tracks admin login state. Must be used within AuthProvider.
+ * @returns {{ isLoggedIn: boolean, login: () => void, logout: () => void }}
+ */
+export function useAuth() {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  return ctx
 }

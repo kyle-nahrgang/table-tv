@@ -1,6 +1,13 @@
 import { useState } from 'react'
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Paper,
+  Alert,
+} from '@mui/material'
 import { loginAdmin } from '../api/login'
-import './admin.css'
 
 /**
  * Login form for authenticating an admin.
@@ -28,30 +35,43 @@ export function Login({ onSuccess }) {
   }
 
   return (
-    <div className="admin-form-container">
-      <h1>Admin Login</h1>
-      <form onSubmit={handleSubmit} className="admin-form">
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete="current-password"
-        />
-        {error && <p className="admin-form-error">{error}</p>}
-        <button type="submit" disabled={loading}>
-          {loading ? 'Logging in...' : 'Log in'}
-        </button>
-      </form>
-    </div>
+    <Box
+      display="flex"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      minHeight="100vh"
+      p={2}
+    >
+      <Paper elevation={3} sx={{ maxWidth: 400, p: 3, width: '100%' }}>
+        <Typography variant="h5" component="h1" gutterBottom align="center">
+          Admin Login
+        </Typography>
+        <Box component="form" onSubmit={handleSubmit} display="flex" flexDirection="column" gap={2} sx={{ mt: 2 }}>
+          <TextField
+            type="email"
+            label="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            fullWidth
+          />
+          <TextField
+            type="password"
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            fullWidth
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+          <Button type="submit" variant="contained" disabled={loading} fullWidth>
+            {loading ? 'Logging in...' : 'Log in'}
+          </Button>
+        </Box>
+      </Paper>
+    </Box>
   )
 }
