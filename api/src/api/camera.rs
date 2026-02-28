@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::{camera::CameraType, Db};
 use crate::error::ApiError;
+use crate::video;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CameraResponse {
@@ -104,5 +105,9 @@ pub async fn cameras_delete(
 pub fn routes() -> axum::Router<Db> {
     axum::Router::new()
         .route("/api/cameras", get(cameras_list).post(cameras_create))
+        .route(
+            "/api/cameras/:id/stream",
+            get(video::camera_stream),
+        )
         .route("/api/cameras/:id", get(cameras_get).put(cameras_update).delete(cameras_delete))
 }

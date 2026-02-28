@@ -5,6 +5,10 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.7", features = ["json"] }
+bytes = "1.0"
+image = "0.25"
+nokhwa = { version = "0.10", default-features = false, features = ["input-native"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 bcrypt = "0.17"
 polodb_core = "5.1"
 serde = { version = "1.0.228", features = ["derive"] }

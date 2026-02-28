@@ -18,6 +18,10 @@ function formatCameraType(cameraType) {
   return { label: 'Internal', detail: null }
 }
 
+function getStreamUrl(id) {
+  return `/api/cameras/${id}/stream`
+}
+
 export function Camera() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -64,6 +68,8 @@ export function Camera() {
   }
 
   const { label, detail } = formatCameraType(camera.camera_type)
+  const parsed = parseCameraType(camera.camera_type)
+  const isInternal = parsed.type === 'internal'
 
   return (
     <Box sx={{ p: 2 }}>
@@ -81,6 +87,20 @@ export function Camera() {
           <Typography color="text.secondary">
             {detail}
           </Typography>
+        )}
+        {isInternal && (
+          <Box sx={{ mt: 2 }}>
+            <img
+              src={getStreamUrl(camera.id)}
+              alt={`${camera.name} live stream`}
+              style={{
+                width: '100%',
+                maxWidth: 640,
+                borderRadius: 8,
+                backgroundColor: '#000',
+              }}
+            />
+          </Box>
         )}
       </Paper>
     </Box>
