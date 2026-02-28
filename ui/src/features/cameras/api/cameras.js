@@ -134,3 +134,23 @@ export async function deleteCamera(id) {
     throw new Error(text || 'Failed to delete camera')
   }
 }
+
+/**
+ * Start RTMP push to the given URL (e.g. YouTube Live, Facebook).
+ * Only works for internal cameras. Requires FFmpeg on the server.
+ * @param {string} cameraId
+ * @param {string} rtmpUrl - e.g. rtmp://a.rtmp.youtube.com/live2/xxxx
+ * @returns {Promise<{ ok: boolean }>}
+ */
+export async function startRtmpStream(cameraId, rtmpUrl) {
+  const res = await fetch(`/api/cameras/${cameraId}/stream/rtmp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: rtmpUrl }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to start RTMP stream')
+  }
+  return res.json()
+}

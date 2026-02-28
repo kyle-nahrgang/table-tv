@@ -1,7 +1,7 @@
 use axum::{extract::State, routing::post, Json};
 use serde::Deserialize;
 
-use crate::db::Db;
+use crate::api::AppState;
 use crate::error::ApiError;
 
 #[derive(Deserialize)]
@@ -18,7 +18,7 @@ pub struct AdminLoginRequest {
 
 /// POST /api/admin - Create the first admin. Fails if any admin already exists.
 pub async fn admin_create(
-    State(db): State<Db>,
+    State(app): State<AppState>,
     Json(req): Json<AdminCreateRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     if req.email.is_empty() || req.password.is_empty() {
@@ -26,16 +26,16 @@ pub async fn admin_create(
     }
     let hash = bcrypt::hash(req.password, bcrypt::DEFAULT_COST)
         .map_err(|e| ApiError::Unknown(e.to_string()))?;
-    db.create_admin(req.email, hash)?;
+    app.db.create_admin(req.email, hash)?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 /// POST /api/admin/login - Authenticate admin by email and password.
 pub async fn admin_login(
-    State(db): State<Db>,
+    State(app): State<AppState>,
     Json(req): Json<AdminLoginRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let admin = db
+    let admin = app.db
         .find_admin_by_email(&req.email)?
         .ok_or(ApiError::InvalidCredentials)?;
     let valid = bcrypt::verify(req.password, &admin.hash)
@@ -46,7 +46,7 @@ pub async fn admin_login(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-pub fn routes() -> axum::Router<Db> {
+pub fn routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/api/admin", post(admin_create))
         .route("/api/admin/login", post(admin_login))

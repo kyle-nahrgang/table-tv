@@ -12,11 +12,12 @@ RUN apt-get update && apt-get install -y libclang-dev clang && rm -rf /var/lib/a
 WORKDIR /app/api
 COPY api/Cargo.toml api/Cargo.lock ./
 COPY api/src ./src
+COPY api/assets ./assets
 RUN cargo build --release
 
 # Runtime
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates avahi-daemon avahi-utils && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates avahi-daemon avahi-utils ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=api-builder /app/api/target/release/table-tv-api /app/server

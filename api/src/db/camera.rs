@@ -42,6 +42,12 @@ impl Db {
         Ok(collection.find_one(doc! { "_id": id })?)
     }
 
+    /// Find the internal camera, if one exists.
+    pub fn find_internal_camera(&self) -> Result<Option<CameraDoc>, ApiError> {
+        let collection = self.0.collection::<CameraDoc>(CAMERAS_COLLECTION);
+        Ok(collection.find_one(doc! { "camera_type": { "Internal": null } })?)
+    }
+
     /// Create a new camera. Fails if creating Internal and one already exists.
     pub fn create_camera(&self, name: String, camera_type: CameraType) -> Result<ObjectId, ApiError> {
         if camera_type.is_internal() {

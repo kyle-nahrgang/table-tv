@@ -4,4 +4,4 @@ mod info;
 mod pool_match;
 mod server;
 
-pub use server::ApiServer;
+pub use server::{ApiServer, AppState};

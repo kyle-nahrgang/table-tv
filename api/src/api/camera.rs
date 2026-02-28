@@ -6,7 +6,8 @@ use axum::{
 use polodb_core::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
-use crate::db::{camera::CameraType, Db};
+use crate::api::AppState;
+use crate::db::camera::CameraType;
 use crate::error::ApiError;
 use crate::video;
 
@@ -41,9 +42,9 @@ pub struct CameraUpdateRequest {
 
 /// GET /api/cameras - List all cameras.
 pub async fn cameras_list(
-    State(db): State<Db>,
+    State(app): State<AppState>,
 ) -> Result<Json<Vec<CameraResponse>>, ApiError> {
-    let cameras = db.list_cameras()?;
+    let cameras = app.db.list_cameras()?;
     let responses: Vec<CameraResponse> = cameras
         .into_iter()
         .filter_map(CameraResponse::from_doc)
@@ -53,11 +54,11 @@ pub async fn cameras_list(
 
 /// GET /api/cameras/:id - Get a camera by id.
 pub async fn cameras_get(
-    State(db): State<Db>,
+    State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<CameraResponse>, ApiError> {
     let oid = ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid camera id".to_string()))?;
-    let camera = db
+    let camera = app.db
         .find_camera_by_id(&oid)?
         .ok_or(ApiError::CameraNotFound)?;
     CameraResponse::from_doc(camera).ok_or(ApiError::CameraNotFound).map(Json)
@@ -65,19 +66,19 @@ pub async fn cameras_get(
 
 /// POST /api/cameras - Create a new camera.
 pub async fn cameras_create(
-    State(db): State<Db>,
+    State(app): State<AppState>,
     Json(req): Json<CameraCreateRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     if req.name.is_empty() {
         return Err(ApiError::BadRequest("name is required".to_string()));
     }
-    let id = db.create_camera(req.name, req.camera_type)?;
+    let id = app.db.create_camera(req.name, req.camera_type)?;
     Ok(Json(serde_json::json!({ "id": id.to_hex() })))
 }
 
 /// PUT /api/cameras/:id - Update a camera.
 pub async fn cameras_update(
-    State(db): State<Db>,
+    State(app): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<CameraUpdateRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -85,29 +86,30 @@ pub async fn cameras_update(
         return Err(ApiError::BadRequest("name is required".to_string()));
     }
     let oid = ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid camera id".to_string()))?;
-    db.update_camera(&oid, req.name, req.camera_type)?;
+    app.db.update_camera(&oid, req.name, req.camera_type)?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 /// DELETE /api/cameras/:id - Delete a camera.
 pub async fn cameras_delete(
-    State(db): State<Db>,
+    State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let oid = ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid camera id".to_string()))?;
-    let deleted = db.delete_camera(&oid)?;
+    let deleted = app.db.delete_camera(&oid)?;
     if !deleted {
         return Err(ApiError::CameraNotFound);
     }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-pub fn routes() -> axum::Router<Db> {
+pub fn routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/api/cameras", get(cameras_list).post(cameras_create))
+        .route("/api/cameras/:id/stream", get(video::camera_stream))
         .route(
-            "/api/cameras/:id/stream",
-            get(video::camera_stream),
+            "/api/cameras/:id/stream/rtmp",
+            axum::routing::post(video::camera_stream_rtmp_start),
         )
         .route("/api/cameras/:id", get(cameras_get).put(cameras_update).delete(cameras_delete))
 }

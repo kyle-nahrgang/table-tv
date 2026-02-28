@@ -10,7 +10,7 @@ const POOL_MATCHES_COLLECTION: &str = "pool_matches";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Rating {
     Apa(u8),
-    Fargo(u8),
+    Fargo(u16),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
