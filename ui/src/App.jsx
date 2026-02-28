@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Box, CircularProgress, Typography } from '@mui/material'
 
 import { useApiInfo } from './apiInfoStore'
@@ -8,10 +8,16 @@ import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { Camera } from './features/cameras'
 import { Admin } from './features/admin'
+import { FacebookCallback } from './pages/FacebookCallback'
 
 function App() {
+  const location = useLocation()
   const { initialized, loading, retrying, refetch } = useApiInfo()
   const { isLoggedIn } = useAuth()
+
+  if (location.pathname === '/facebook/callback') {
+    return <FacebookCallback />
+  }
 
   if (loading) {
     return (

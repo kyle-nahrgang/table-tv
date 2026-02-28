@@ -7,6 +7,7 @@ pub mod video;
 
 #[tokio::main]
 async fn main() -> Result<(), crate::error::ApiError> {
+    dotenvy::dotenv().ok();
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tower_http=debug")))
         .with(tracing_subscriber::fmt::layer())

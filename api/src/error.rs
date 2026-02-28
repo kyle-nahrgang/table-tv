@@ -36,14 +36,14 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match &self {
-            ApiError::AdminExists => (StatusCode::CONFLICT, "Admin already exists"),
-            ApiError::InternalCameraExists => (StatusCode::CONFLICT, "Internal camera already exists"),
-            ApiError::CameraNotFound => (StatusCode::NOT_FOUND, "Camera not found"),
-            ApiError::PoolMatchNotFound => (StatusCode::NOT_FOUND, "Pool match not found"),
-            ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
-            ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad request"),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
+            ApiError::AdminExists => (StatusCode::CONFLICT, "Admin already exists".to_string()),
+            ApiError::InternalCameraExists => (StatusCode::CONFLICT, "Internal camera already exists".to_string()),
+            ApiError::CameraNotFound => (StatusCode::NOT_FOUND, "Camera not found".to_string()),
+            ApiError::PoolMatchNotFound => (StatusCode::NOT_FOUND, "Pool match not found".to_string()),
+            ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()),
+            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
-        (status, message.to_string()).into_response()
+        (status, message).into_response()
     }
 }

@@ -5,10 +5,10 @@ use std::sync::RwLock;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::api::{admin, camera, info, pool_match};
+use crate::api::{admin, camera, facebook, info, pool_match};
 use crate::db::Db;
 use crate::error::ApiError;
-use crate::video::OverlayState;
+use crate::video::{self, OverlayState};
 
 pub struct ApiServer;
 
@@ -16,14 +16,22 @@ pub struct ApiServer;
 pub struct AppState {
     pub db: Db,
     pub overlay: OverlayState,
+    pub facebook_tokens: facebook::FacebookTokenCache,
+    pub rtmp_processes: crate::video::RtmpState,
 }
 
 impl ApiServer {
     fn router(db: Db) -> Router {
         let overlay: OverlayState = Arc::new(RwLock::new(None));
+        if db.find_internal_camera().ok().flatten().is_some() {
+            video::ensure_internal_camera_ready(overlay.clone());
+            video::restore_overlay_from_db(&db, &overlay);
+        }
         let app_state = AppState {
             db: db.clone(),
             overlay: overlay.clone(),
+            facebook_tokens: facebook::FacebookTokenCache::new(),
+            rtmp_processes: crate::video::rtmp_state_new(),
         };
 
         let mut app = Router::new()
@@ -31,6 +39,7 @@ impl ApiServer {
             .merge(admin::routes())
             .merge(camera::routes())
             .merge(pool_match::routes())
+            .merge(facebook::routes())
             .merge(info::routes())
             .layer(TraceLayer::new_for_http())
             .with_state(app_state);
@@ -50,6 +59,15 @@ impl ApiServer {
         let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
         let addr: std::net::SocketAddr = format!("0.0.0.0:{}", port).parse()?;
         tracing::info!("starting api server");
+        if let Err(e) = gstreamer::init() {
+            tracing::warn!(
+                error = %e,
+                "GStreamer init failed. RTMP streaming will not work. \
+                Install GStreamer: brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly"
+            );
+        } else {
+            tracing::info!("GStreamer initialized for RTMP streaming");
+        }
         let listener = tokio::net::TcpListener::bind(addr).await?;
         axum::serve(listener, app).await?;
         Ok(())

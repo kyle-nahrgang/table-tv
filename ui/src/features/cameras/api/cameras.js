@@ -136,10 +136,39 @@ export async function deleteCamera(id) {
 }
 
 /**
+ * Check if Facebook Live is configured.
+ * @returns {Promise<{ configured: boolean, redirect_uri?: string }>}
+ */
+export async function getFacebookStatus() {
+  const res = await fetch('/api/facebook/status')
+  if (!res.ok) throw new Error('Failed to check Facebook status')
+  return res.json()
+}
+
+/**
+ * Get RTMP URL from Facebook Live API. Creates a new live video and returns the stream URL.
+ * Requires auth_key from OAuth callback.
+ * @param {{ title?: string, description?: string, auth_key?: string }} [options]
+ * @returns {Promise<{ url: string, live_video_id?: string }>}
+ */
+export async function getFacebookLiveUrl(options = {}) {
+  const res = await fetch('/api/facebook/live-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to get Facebook stream URL')
+  }
+  return res.json()
+}
+
+/**
  * Start RTMP push to the given URL (e.g. YouTube Live, Facebook).
  * Only works for internal cameras. Requires FFmpeg on the server.
  * @param {string} cameraId
- * @param {string} rtmpUrl - e.g. rtmp://a.rtmp.youtube.com/live2/xxxx
+ * @param {string} rtmpUrl - e.g. rtmp://a.rtmp.youtube.com/live2/xxxx or rtmps://...
  * @returns {Promise<{ ok: boolean }>}
  */
 export async function startRtmpStream(cameraId, rtmpUrl) {
@@ -152,5 +181,32 @@ export async function startRtmpStream(cameraId, rtmpUrl) {
     const text = await res.text()
     throw new Error(text || 'Failed to start RTMP stream')
   }
+  return res.json()
+}
+
+/**
+ * Stop the RTMP stream for a camera.
+ * @param {string} cameraId
+ * @returns {Promise<{ ok: boolean }>}
+ */
+export async function stopRtmpStream(cameraId) {
+  const res = await fetch(`/api/cameras/${cameraId}/stream/rtmp/stop`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to stop RTMP stream')
+  }
+  return res.json()
+}
+
+/**
+ * Check if RTMP stream is active for a camera.
+ * @param {string} cameraId
+ * @returns {Promise<{ active: boolean }>}
+ */
+export async function getRtmpStreamStatus(cameraId) {
+  const res = await fetch(`/api/cameras/${cameraId}/stream/rtmp/status`)
+  if (!res.ok) throw new Error('Failed to get RTMP status')
   return res.json()
 }

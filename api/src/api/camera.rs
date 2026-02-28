@@ -111,5 +111,13 @@ pub fn routes() -> axum::Router<AppState> {
             "/api/cameras/:id/stream/rtmp",
             axum::routing::post(video::camera_stream_rtmp_start),
         )
+        .route(
+            "/api/cameras/:id/stream/rtmp/stop",
+            axum::routing::post(video::camera_stream_rtmp_stop),
+        )
+        .route(
+            "/api/cameras/:id/stream/rtmp/status",
+            axum::routing::get(video::camera_stream_rtmp_status),
+        )
         .route("/api/cameras/:id", get(cameras_get).put(cameras_update).delete(cameras_delete))
 }

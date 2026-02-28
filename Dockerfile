@@ -1,27 +1,64 @@
-# Build UI
+# =============================================================================
+# UI build - only rebuilds when ui/ changes
+# npm ci cached unless package*.json changes
+# =============================================================================
 FROM node:22-alpine AS ui-builder
 WORKDIR /app/ui
-COPY ui/package*.json ./
+
+# Dependencies: only rebuild when package files change
+COPY ui/package.json ui/package-lock.json ./
 RUN npm ci
-COPY ui/ ./
+
+# Source: rebuild when any ui source changes
+COPY ui/vite.config.js ./
+COPY ui/index.html ./
+COPY ui/src ./src
 RUN npm run build
 
-# Build API
-FROM rust:1-bookworm AS api-builder
-RUN apt-get update && apt-get install -y libclang-dev clang && rm -rf /var/lib/apt/lists/*
+# =============================================================================
+# API build - only rebuilds when api/ changes
+# Dependencies: only rebuild when Cargo.toml or Cargo.lock changes
+# =============================================================================
+FROM rust:1-bookworm AS api-deps
+RUN apt-get update && apt-get install -y libclang-dev clang \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app/api
 COPY api/Cargo.toml api/Cargo.lock ./
+
+# Build dependencies only (dummy main so we don't need src yet)
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release && rm -rf src
+
+# =============================================================================
+# API app - rebuilds when api/src or api/assets changes
+# =============================================================================
+FROM api-deps AS api-builder
 COPY api/src ./src
 COPY api/assets ./assets
 RUN cargo build --release
 
-# Runtime
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates avahi-daemon avahi-utils ffmpeg && rm -rf /var/lib/apt/lists/*
+# =============================================================================
+# Runtime - combines UI + API
+# Build targets: ui-builder | api-deps | api-builder | table-tv (default)
+# =============================================================================
+FROM debian:bookworm-slim AS table-tv
+RUN apt-get update && apt-get install -y ca-certificates avahi-daemon avahi-utils dumb-init \
+    libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=api-builder /app/api/target/release/table-tv-api /app/server
 COPY --from=ui-builder /app/ui/dist /app/ui-dist
+
+# Copy .env if it exists (use .env.example as fallback)
+COPY .env* ./
+RUN if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi
+
+# Create data directory for persistent db storage
+RUN mkdir -p /app/data
 
 # Avahi config for container (no D-Bus)
 RUN echo "[server]\nhost-name=table-tv\nenable-dbus=no\n" > /etc/avahi/avahi-daemon.conf
@@ -30,6 +67,7 @@ COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENV PORT=80
+ENV RUST_LOG=info,tower_http=debug
 EXPOSE 80
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/app/entrypoint.sh"]
