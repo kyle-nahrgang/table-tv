@@ -11,9 +11,9 @@ pub struct ApiServerInfo {
     pub location_name: String,
 }
 
-/// GET /api/info - Returns server info. `initialized` is false if no admin exists yet.
+/// GET /api/info - Returns server info. `initialized` is true when Auth0 is configured (no registration gate).
 pub async fn info(State(app): State<AppState>) -> Result<axum::Json<ApiServerInfo>, ApiError> {
-    let initialized = app.db.has_admin()?;
+    let initialized = app.jwks.is_some();
     let settings = app.db.get_settings().unwrap_or_default();
     Ok(axum::Json(ApiServerInfo {
         initialized,

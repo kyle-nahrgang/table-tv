@@ -1,4 +1,5 @@
-mod admin;
+mod auth;
+mod auth0;
 mod camera;
 mod facebook;
 mod info;

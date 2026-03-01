@@ -14,9 +14,6 @@ pub enum ApiError {
     #[error("Database error: {0}")]
     Db(#[from] polodb_core::Error),
 
-    #[error("Admin already exists")]
-    AdminExists,
-
     #[error("Internal camera already exists")]
     InternalCameraExists,
 
@@ -29,6 +26,9 @@ pub enum ApiError {
     #[error("Invalid credentials")]
     InvalidCredentials,
 
+    #[error("Auth0 error: {0}")]
+    Auth0ClientError(String),
+
     #[error("Bad request: {0}")]
     BadRequest(String),
 }
@@ -36,11 +36,11 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match &self {
-            ApiError::AdminExists => (StatusCode::CONFLICT, "Admin already exists".to_string()),
             ApiError::InternalCameraExists => (StatusCode::CONFLICT, "Internal camera already exists".to_string()),
             ApiError::CameraNotFound => (StatusCode::NOT_FOUND, "Camera not found".to_string()),
             ApiError::PoolMatchNotFound => (StatusCode::NOT_FOUND, "Pool match not found".to_string()),
             ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()),
+            ApiError::Auth0ClientError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.clone()),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };

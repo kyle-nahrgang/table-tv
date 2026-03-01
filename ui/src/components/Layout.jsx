@@ -8,14 +8,20 @@ import {
   Typography,
 } from '@mui/material'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
+import { useAuth0 } from '@auth0/auth0-react'
 import { useAuth } from '../authStore.jsx'
 import { useApiInfo } from '../apiInfoStore.jsx'
 
 export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isLoggedIn, logout } = useAuth()
+  const { loginWithRedirect } = useAuth0()
+  const { isLoggedIn, isAdmin, logout } = useAuth()
   const { locationName } = useApiInfo()
+
+  const handleLogin = () => {
+    loginWithRedirect({ appState: { returnTo: location.pathname } })
+  }
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -33,21 +39,27 @@ export function Layout() {
           >
             Home
           </Button>
-          <Button
-            color="inherit"
-            onClick={() => navigate('/admin')}
-            startIcon={<AdminPanelSettingsIcon />}
-            sx={{
-              ml: 1,
-              fontWeight: location.pathname.startsWith('/admin') ? 700 : 400,
-            }}
-          >
-            Admin
-          </Button>
+          {isAdmin && (
+            <Button
+              color="inherit"
+              onClick={() => navigate('/admin')}
+              startIcon={<AdminPanelSettingsIcon />}
+              sx={{
+                ml: 1,
+                fontWeight: location.pathname.startsWith('/admin') ? 700 : 400,
+              }}
+            >
+              Admin
+            </Button>
+          )}
           <Box sx={{ flexGrow: 1 }} />
-          {isLoggedIn && (
+          {isLoggedIn ? (
             <Button color="inherit" onClick={logout}>
               Log out
+            </Button>
+          ) : (
+            <Button color="inherit" onClick={handleLogin}>
+              Log in
             </Button>
           )}
         </Toolbar>

@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::api::{admin, camera, facebook, info, pool_match, settings};
+use crate::api::{auth, camera, facebook, info, pool_match, settings};
 use crate::db::Db;
 use crate::error::ApiError;
 use crate::video::{self, OverlayState};
@@ -19,6 +19,7 @@ pub struct AppState {
     pub facebook_tokens: facebook::FacebookTokenCache,
     pub rtmp_processes: crate::video::RtmpState,
     pub preview_ffmpeg: crate::video::PreviewFfmpegHandle,
+    pub jwks: Option<Arc<auth::JwksCache>>,
 }
 
 impl ApiServer {
@@ -31,17 +32,23 @@ impl ApiServer {
             video::restore_overlay_from_db(&db, &overlay, &rtmp_processes);
             video::spawn_overlay_refresh_task(db.clone(), overlay.clone(), rtmp_processes.clone());
         }
+        let auth0_ready = std::env::var("AUTH0_DOMAIN").is_ok()
+            && (std::env::var("AUTH0_AUDIENCE").is_ok() || std::env::var("AUTH0_CLIENT_ID").is_ok());
+        let jwks = auth0_ready
+            .then(|| Arc::new(auth::JwksCache::new(&std::env::var("AUTH0_DOMAIN").unwrap_or_default())));
+
         let app_state = AppState {
             db: db.clone(),
             overlay: overlay.clone(),
             facebook_tokens: facebook::FacebookTokenCache::new(),
             rtmp_processes,
             preview_ffmpeg,
+            jwks,
         };
 
         let mut app = Router::new()
             .route("/api/hello", get(hello_world))
-            .merge(admin::routes())
+            .merge(auth::routes())
             .merge(camera::routes())
             .merge(pool_match::routes())
             .merge(facebook::routes())

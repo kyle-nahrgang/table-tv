@@ -1,25 +1,55 @@
+import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Box, CircularProgress, Typography } from '@mui/material'
+import { Box, Button, CircularProgress, Typography } from '@mui/material'
 
 import { useApiInfo } from './apiInfoStore.jsx'
-import { useAuth } from './authStore.jsx'
-import { Registration } from './features/admin'
+import { useAuth0 } from '@auth0/auth0-react'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { Camera } from './features/cameras'
 import { Admin } from './features/admin'
 import { FacebookCallback } from './pages/FacebookCallback'
 
+const LOADING_TIMEOUT_MS = 15000
+
 function App() {
   const location = useLocation()
   const { initialized, loading, retrying, refetch } = useApiInfo()
-  const { isLoggedIn } = useAuth()
+  const { isLoading: auth0Loading, error: auth0Error } = useAuth0()
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false)
+
+  useEffect(() => {
+    if (!loading && !auth0Loading) {
+      setLoadingTimedOut(false)
+      return
+    }
+    const t = setTimeout(() => setLoadingTimedOut(true), LOADING_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [loading, auth0Loading])
 
   if (location.pathname === '/facebook/callback') {
     return <FacebookCallback />
   }
 
-  if (loading) {
+  if (auth0Error) {
+    return (
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        gap={2}
+        minHeight="100vh"
+      >
+        <Typography color="error">Auth0 error: {auth0Error.message}</Typography>
+        <Button variant="outlined" onClick={() => window.location.replace(window.location.pathname)}>
+          Clear and retry
+        </Button>
+      </Box>
+    )
+  }
+
+  if (loading || auth0Loading) {
     return (
       <Box
         display="flex"
@@ -33,12 +63,45 @@ function App() {
         <Typography color="text.secondary">
           {retrying ? 'Connecting... Retrying every 5 seconds.' : 'Loading...'}
         </Typography>
+        {loadingTimedOut && (
+          <Box display="flex" flexDirection="column" alignItems="center" gap={1} mt={2}>
+            <Typography color="text.secondary" variant="body2">
+              Taking longer than expected?
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Ensure the API is running (port 8080). If you just returned from login, try clearing the URL.
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => window.location.replace(window.location.pathname)}
+            >
+              Clear URL and refresh
+            </Button>
+            <Button variant="outlined" size="small" onClick={() => refetch()}>
+              Retry connection
+            </Button>
+          </Box>
+        )}
       </Box>
     )
   }
 
   if (!initialized) {
-    return <Registration onSuccess={refetch} />
+    return (
+      <Box
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        gap={2}
+        minHeight="100vh"
+      >
+        <Typography color="text.secondary">
+          Auth0 is not configured. Set AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_AUDIENCE in your .env file.
+        </Typography>
+      </Box>
+    )
   }
 
   return (

@@ -1,10 +1,10 @@
 use polodb_core::Database;
 use std::path::Path;
 
-pub mod admin;
 pub mod camera;
 pub mod pool_match;
 pub mod settings;
+pub mod user;
 
 use crate::error::ApiError;
 
