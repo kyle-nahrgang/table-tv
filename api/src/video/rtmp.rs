@@ -1,5 +1,4 @@
 //! RTMP streaming pipeline. Spawns ffmpeg to read MJPEG from stream URL and push to RTMP.
-//! On macOS, uses FFmpeg direct capture (avfoundation + videotoolbox) for better framerate.
 //! When running in container, adds drawtext overlay: location (top left), camera name (underneath), time (top right).
 
 use std::path::Path;
@@ -151,114 +150,9 @@ pub fn rtmp_state_new() -> RtmpState {
     Arc::new(std::sync::RwLock::new(std::collections::HashMap::new()))
 }
 
-/// Spawn RTMP pipeline. On macOS uses FFmpeg direct capture (avfoundation + videotoolbox) for
-/// internal cameras. Use `use_mjpeg_input: true` for RTSP cameras (reads from stream URL on all platforms).
+/// Spawn RTMP pipeline. Reads MJPEG from stream URL and pushes to RTMP.
 /// When running in container, draws location (top left), camera name (underneath), and time (top right).
 pub fn spawn_rtmp_pipeline(
-    stream_url: &str,
-    rtmp_url: &str,
-    stop_rx: std::sync::mpsc::Receiver<()>,
-    rtmp: RtmpState,
-    id: String,
-    overlay_path: &std::path::Path,
-    camera_index: u32,
-    use_mjpeg_input: bool,
-    location_name: &str,
-    camera_name: &str,
-) -> Result<(), String> {
-    if use_mjpeg_input {
-        spawn_rtmp_pipeline_mjpeg(
-            stream_url,
-            rtmp_url,
-            stop_rx,
-            rtmp,
-            id,
-            overlay_path,
-            location_name,
-            camera_name,
-        )
-    } else {
-        #[cfg(target_os = "macos")]
-        {
-            let _ = stream_url;
-            spawn_rtmp_pipeline_direct(
-                rtmp_url,
-                stop_rx,
-                rtmp,
-                id,
-                overlay_path,
-                camera_index,
-                location_name,
-                camera_name,
-            )
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            spawn_rtmp_pipeline_mjpeg(
-                stream_url,
-                rtmp_url,
-                stop_rx,
-                rtmp,
-                id,
-                overlay_path,
-                location_name,
-                camera_name,
-            )
-        }
-    }
-}
-
-/// FFmpeg direct capture via avfoundation + videotoolbox (macOS).
-#[cfg(target_os = "macos")]
-fn spawn_rtmp_pipeline_direct(
-    rtmp_url: &str,
-    stop_rx: std::sync::mpsc::Receiver<()>,
-    rtmp: RtmpState,
-    id: String,
-    overlay_path: &std::path::Path,
-    camera_index: u32,
-    _location_name: &str,
-    _camera_name: &str,
-) -> Result<(), String> {
-    let overlay_path_str = resolve_overlay_path(overlay_path)?;
-    let camera_idx = camera_index.to_string();
-
-    tracing::info!(
-        overlay_path = %overlay_path_str,
-        camera_index = camera_index,
-        "RTMP: ffmpeg avfoundation + videotoolbox (direct capture)"
-    );
-
-    let video_input = [
-        "-f", "avfoundation", "-framerate", "30", "-video_size", "1280x720",
-        "-pixel_format", "uyvy422", "-video_device_index", &camera_idx, "-i", "0:none",
-    ];
-    let filter = "[1:v]fps=30[main];[main][2:v]overlay=0:H-80,format=yuv420p[out]";
-    let args = build_rtmp_args(
-        &video_input,
-        &overlay_path_str,
-        filter,
-        "h264_videotoolbox",
-        &[],
-        rtmp_url,
-    );
-
-    let child = std::process::Command::new("ffmpeg")
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn ffmpeg: {}. Ensure ffmpeg is installed.", e))?;
-
-    spawn_ffmpeg_monitor(child, stop_rx, rtmp, id);
-
-    Ok(())
-}
-
-/// Spawn an ffmpeg process that reads MJPEG from stream_url and pushes to rtmp_url.
-/// Used for RTSP cameras (all platforms) and internal camera on Linux.
-fn spawn_rtmp_pipeline_mjpeg(
     stream_url: &str,
     rtmp_url: &str,
     stop_rx: std::sync::mpsc::Receiver<()>,

@@ -6,15 +6,9 @@ use super::{Db, Id, new_id};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum CameraType {
     Rtsp { url: String },
-    Internal,
-    Usb { device: String },
 }
 
 impl CameraType {
-    pub fn is_internal(&self) -> bool {
-        matches!(self, CameraType::Internal)
-    }
-
     pub fn is_rtsp(&self) -> bool {
         matches!(self, CameraType::Rtsp { .. })
     }
@@ -22,7 +16,6 @@ impl CameraType {
     pub fn rtsp_url(&self) -> Option<&str> {
         match self {
             CameraType::Rtsp { url } => Some(url.as_str()),
-            _ => None,
         }
     }
 }
@@ -96,37 +89,8 @@ impl Db {
         }
     }
 
-    /// Find the internal camera, if one exists.
-    pub fn find_internal_camera(&self) -> Result<Option<CameraDoc>, ApiError> {
-        let internal_json = serde_json::to_string(&CameraType::Internal)
-            .map_err(|e| ApiError::Unknown(e.to_string()))?;
-        let conn = self.0.lock().map_err(|e| ApiError::Unknown(e.to_string()))?;
-        let mut stmt =
-            conn.prepare("SELECT id, name, camera_type FROM cameras WHERE camera_type = ?1")?;
-        let mut rows = stmt.query([internal_json])?;
-        if let Some(row) = rows.next()? {
-            let id: String = row.get(0)?;
-            let name: String = row.get(1)?;
-            let camera_type: String = row.get(2)?;
-            let camera_type: CameraType =
-                serde_json::from_str(&camera_type).map_err(|e| ApiError::Unknown(e.to_string()))?;
-            Ok(Some(CameraDoc {
-                id: Some(id),
-                name,
-                camera_type,
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Create a new camera. Fails if creating Internal and one already exists.
+    /// Create a new camera.
     pub fn create_camera(&self, name: String, camera_type: CameraType) -> Result<Id, ApiError> {
-        if camera_type.is_internal() {
-            if self.find_internal_camera()?.is_some() {
-                return Err(ApiError::InternalCameraExists);
-            }
-        }
         let id = new_id();
         let camera_type_json =
             serde_json::to_string(&camera_type).map_err(|e| ApiError::Unknown(e.to_string()))?;
@@ -139,24 +103,13 @@ impl Db {
         Ok(id)
     }
 
-    /// Update a camera. Fails if updating to Internal and another Internal already exists.
+    /// Update a camera.
     pub fn update_camera(
         &self,
         id: &str,
         name: String,
         camera_type: CameraType,
     ) -> Result<(), ApiError> {
-        if camera_type.is_internal() {
-            let current = self.find_camera_by_id(id)?;
-            let was_already_internal = current
-                .as_ref()
-                .map_or(false, |c| c.camera_type.is_internal());
-            if !was_already_internal {
-                if self.find_internal_camera()?.is_some() {
-                    return Err(ApiError::InternalCameraExists);
-                }
-            }
-        }
         let camera_type_json =
             serde_json::to_string(&camera_type).map_err(|e| ApiError::Unknown(e.to_string()))?;
         let conn = self.0.lock().map_err(|e| ApiError::Unknown(e.to_string()))?;

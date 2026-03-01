@@ -24,7 +24,7 @@ import HistoryIcon from '@mui/icons-material/History'
 import StopIcon from '@mui/icons-material/Stop'
 import LiveTvIcon from '@mui/icons-material/LiveTv'
 import VideocamIcon from '@mui/icons-material/Videocam'
-import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, parseCameraType, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
+import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
 import { getMatch, updateScore, endMatch } from '../api/poolMatches.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
 import { getToken, urlWithToken } from '../../../apiClient.js'
@@ -93,8 +93,7 @@ export function Match() {
   }, [match?.camera_id])
 
   useEffect(() => {
-    const camType = parseCameraType(camera?.camera_type).type
-    if (!camera?.id || (camType !== 'internal' && camType !== 'rtsp')) return
+    if (!camera?.id) return
     setStreamError(false)
     setStreamUrl('')
     setPreviewLoaded(false)
@@ -105,28 +104,24 @@ export function Match() {
       }
     })
     return () => { cancelled = true }
-  }, [camera?.id, camera?.camera_type])
+  }, [camera?.id])
 
   const fetchRtmpStatus = useCallback(async () => {
     if (!camera?.id) return
-    const camType = parseCameraType(camera?.camera_type).type
-    if (camType !== 'internal' && camType !== 'rtsp') return
     try {
       const { active } = await getRtmpStreamStatus(camera.id)
       setRtmpActive(active)
     } catch {
       setRtmpActive(false)
     }
-  }, [camera?.id, camera?.camera_type])
+  }, [camera?.id])
 
   useEffect(() => {
     if (!camera?.id) return
-    const camType = parseCameraType(camera?.camera_type).type
-    if (camType !== 'internal' && camType !== 'rtsp') return
     fetchRtmpStatus()
     const interval = setInterval(fetchRtmpStatus, 5000)
     return () => clearInterval(interval)
-  }, [camera?.id, camera?.camera_type, fetchRtmpStatus])
+  }, [camera?.id, fetchRtmpStatus])
 
   useEffect(() => {
     let cancelled = false
@@ -289,8 +284,7 @@ export function Match() {
   const score = `${match.player_one.games_won} - ${match.player_two.games_won}`
   const isActive = !match.end_time
   const winner = getMatchWinner(match)
-  const parsed = parseCameraType(camera?.camera_type)
-  const hasStream = camera && (parsed.type === 'internal' || parsed.type === 'rtsp')
+  const hasStream = !!camera
 
   return (
     <Box sx={{ p: 2 }}>
@@ -372,7 +366,6 @@ export function Match() {
               }}
               onStreamError={() => setStreamError(true)}
               rtmpActive={rtmpActive}
-              cameraType={parsed.type}
               cameraName={camera.name}
               locationName={locationName}
               overlayMatch={isActive ? match : null}

@@ -1,38 +1,23 @@
 /**
  * Camera API client.
- * Camera types: Rtsp { url }, Internal, Usb { device }
+ * Camera type: Rtsp { url }
  */
 import { fetchWithAuth } from '../../../apiClient.js'
-
-/**
- * @typedef {'rtsp' | 'internal' | 'usb'} CameraTypeKey
- */
 
 /**
  * @typedef {Object} Camera
  * @property {string} id
  * @property {string} name
- * @property {{ Rtsp?: { url: string }, Internal?: null, Usb?: { device: string } }} camera_type
+ * @property {{ Rtsp: { url: string } }} camera_type
  */
 
 /**
  * Build camera_type payload for API.
- * @param {CameraTypeKey} type
- * @param {string} [url] - For Rtsp
- * @param {string} [device] - For Usb
- * @returns {{ Rtsp?: { url: string }, Internal?: null, Usb?: { device: string } }}
+ * @param {string} [url]
+ * @returns {{ Rtsp: { url: string } }}
  */
-function buildCameraType(type, url = '', device = '') {
-  switch (type) {
-    case 'rtsp':
-      return { Rtsp: { url } }
-    case 'internal':
-      return { Internal: null }
-    case 'usb':
-      return { Usb: { device } }
-    default:
-      return { Internal: null }
-  }
+function buildCameraType(url = '') {
+  return { Rtsp: { url } }
 }
 
 /**
@@ -43,33 +28,20 @@ function buildCameraType(type, url = '', device = '') {
  */
 export function formatCameraType(cameraType, format = 'string') {
   const parsed = parseCameraType(cameraType)
-  if (parsed.type === 'rtsp') {
-    const str = `RTSP: ${parsed.url || '(no url)'}`
-    return format === 'label' ? { label: 'RTSP', detail: parsed.url || '(no url)' } : str
-  }
-  if (parsed.type === 'usb') {
-    const str = `USB: ${parsed.device || '(no device)'}`
-    return format === 'label' ? { label: 'USB', detail: parsed.device || '(no device)' } : str
-  }
-  return format === 'label' ? { label: 'Internal', detail: null } : 'Internal'
+  const str = `RTSP: ${parsed.url || '(no url)'}`
+  return format === 'label' ? { label: 'RTSP', detail: parsed.url || '(no url)' } : str
 }
 
 /**
- * Parse camera_type from API response to { type, url?, device? }.
+ * Parse camera_type from API response to { type, url }.
  * @param {Camera['camera_type']} cameraType
- * @returns {{ type: CameraTypeKey, url?: string, device?: string }}
+ * @returns {{ type: 'rtsp', url: string }}
  */
 export function parseCameraType(cameraType) {
   if (cameraType?.Rtsp) {
     return { type: 'rtsp', url: cameraType.Rtsp.url || '' }
   }
-  if (cameraType?.Internal !== undefined) {
-    return { type: 'internal' }
-  }
-  if (cameraType?.Usb) {
-    return { type: 'usb', device: cameraType.Usb.device || '' }
-  }
-  return { type: 'internal' }
+  return { type: 'rtsp', url: '' }
 }
 
 /**
@@ -99,18 +71,16 @@ export async function getCamera(id) {
 
 /**
  * @param {string} name
- * @param {CameraTypeKey} type
  * @param {string} [url]
- * @param {string} [device]
  * @returns {Promise<{ id: string }>}
  */
-export async function createCamera(name, type, url = '', device = '') {
+export async function createCamera(name, url = '') {
   const res = await fetchWithAuth('/api/cameras', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name,
-      camera_type: buildCameraType(type, url, device),
+      camera_type: buildCameraType(url),
     }),
   })
   if (!res.ok) {
@@ -123,18 +93,16 @@ export async function createCamera(name, type, url = '', device = '') {
 /**
  * @param {string} id
  * @param {string} name
- * @param {CameraTypeKey} type
  * @param {string} [url]
- * @param {string} [device]
  * @returns {Promise<void>}
  */
-export async function updateCamera(id, name, type, url = '', device = '') {
+export async function updateCamera(id, name, url = '') {
   const res = await fetchWithAuth(`/api/cameras/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name,
-      camera_type: buildCameraType(type, url, device),
+      camera_type: buildCameraType(url),
     }),
   })
   if (!res.ok) {
@@ -186,7 +154,7 @@ export async function getFacebookLiveUrl(options = {}) {
 
 /**
  * Start RTMP push to the given URL (e.g. YouTube Live, Facebook).
- * Only works for internal cameras. Requires FFmpeg on the server.
+ * Only works for RTSP cameras. Requires FFmpeg on the server.
  * @param {string} cameraId
  * @param {string} rtmpUrl - e.g. rtmp://a.rtmp.youtube.com/live2/xxxx or rtmps://...
  * @returns {Promise<{ ok: boolean }>}

@@ -14,9 +14,6 @@ pub enum ApiError {
     #[error("Database error: {0}")]
     Db(#[from] rusqlite::Error),
 
-    #[error("Internal camera already exists")]
-    InternalCameraExists,
-
     #[error("Camera not found")]
     CameraNotFound,
 
@@ -39,7 +36,6 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match &self {
-            ApiError::InternalCameraExists => (StatusCode::CONFLICT, "Internal camera already exists".to_string()),
             ApiError::CameraNotFound => (StatusCode::NOT_FOUND, "Camera not found".to_string()),
             ApiError::PoolMatchNotFound => (StatusCode::NOT_FOUND, "Pool match not found".to_string()),
             ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()),

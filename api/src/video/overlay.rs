@@ -29,7 +29,7 @@ fn overlay_name_for_camera(camera_name: &str) -> String {
         })
         .collect();
     if sanitized.is_empty() {
-        "internal".to_string()
+        "default".to_string()
     } else {
         sanitized
     }
@@ -199,7 +199,7 @@ pub fn restore_overlay_from_db(db: &Db, overlay_state: &OverlayState, rtmp_proce
                 .ok()
                 .flatten()
                 .is_some();
-            if (camera.camera_type.is_internal() || camera.camera_type.is_rtsp()) && has_active_match {
+            if camera.camera_type.is_rtsp() && has_active_match {
                 update_overlay(db, overlay_state, id, rtmp_processes, None);
                 break;
             }
@@ -218,7 +218,7 @@ pub fn spawn_overlay_refresh_task(db: Db, overlay_state: OverlayState, _rtmp_pro
                 Err(_) => continue,
             };
             for camera in cameras {
-                if camera.camera_type.is_internal() || camera.camera_type.is_rtsp() {
+                if camera.camera_type.is_rtsp() {
                     let overlay = overlay_state.read().ok().and_then(|g| (*g).clone());
                     let path = overlay_path_for_camera(&camera.name);
                     render_overlay_png(&path, overlay.as_ref());
@@ -249,8 +249,8 @@ pub fn update_overlay(
         }
     };
 
-    if !camera.camera_type.is_internal() && !camera.camera_type.is_rtsp() {
-        tracing::debug!(camera_id = %camera_id, "Overlay only applies to internal and RTSP cameras");
+    if !camera.camera_type.is_rtsp() {
+        tracing::debug!(camera_id = %camera_id, "Overlay only applies to RTSP cameras");
         return;
     }
 
@@ -281,7 +281,7 @@ pub fn clear_overlay(
     _rtmp_processes: &rtmp::RtmpState,
 ) {
     let camera = match db.find_camera_by_id(camera_id) {
-        Ok(Some(c)) if c.camera_type.is_internal() || c.camera_type.is_rtsp() => c,
+        Ok(Some(c)) if c.camera_type.is_rtsp() => c,
         _ => return,
     };
     let current = overlay_state.read().ok().and_then(|g| (*g).clone());

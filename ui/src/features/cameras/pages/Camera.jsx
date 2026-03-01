@@ -24,7 +24,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import StopIcon from '@mui/icons-material/Stop'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import LiveTvIcon from '@mui/icons-material/LiveTv'
-import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, formatCameraType, parseCameraType, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
+import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, formatCameraType, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
 import { getActiveMatch, createMatch, updateScore, endMatch } from '../api/poolMatches.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
 import { getToken, urlWithToken } from '../../../apiClient.js'
@@ -69,8 +69,7 @@ export function Camera() {
   const [previewLoaded, setPreviewLoaded] = useState(false)
 
   useEffect(() => {
-    const camType = parseCameraType(camera?.camera_type).type
-    if (!camera?.id || (camType !== 'internal' && camType !== 'rtsp')) return
+    if (!camera?.id) return
     setStreamError(false)
     setStreamUrl('') // Clear while fetching token
     setPreviewLoaded(false)
@@ -81,7 +80,7 @@ export function Camera() {
       }
     })
     return () => { cancelled = true }
-  }, [camera?.id, camera?.camera_type])
+  }, [camera?.id])
 
   const fetchActiveMatch = useCallback(async () => {
     if (!camera?.id) return
@@ -128,24 +127,20 @@ export function Camera() {
 
   const fetchRtmpStatus = useCallback(async () => {
     if (!camera?.id) return
-    const camType = parseCameraType(camera?.camera_type).type
-    if (camType !== 'internal' && camType !== 'rtsp') return
     try {
       const { active } = await getRtmpStreamStatus(camera.id)
       setRtmpActive(active)
     } catch {
       setRtmpActive(false)
     }
-  }, [camera?.id, camera?.camera_type])
+  }, [camera?.id])
 
   useEffect(() => {
     if (!camera?.id) return
-    const camType = parseCameraType(camera?.camera_type).type
-    if (camType !== 'internal' && camType !== 'rtsp') return
     fetchRtmpStatus()
     const interval = setInterval(fetchRtmpStatus, 5000)
     return () => clearInterval(interval)
-  }, [camera?.id, camera?.camera_type, fetchRtmpStatus])
+  }, [camera?.id, fetchRtmpStatus])
 
   useEffect(() => {
     let cancelled = false
@@ -358,8 +353,7 @@ export function Camera() {
   }
 
   const { label, detail } = formatCameraType(camera.camera_type, 'label')
-  const parsed = parseCameraType(camera.camera_type)
-  const hasStream = parsed.type === 'internal' || parsed.type === 'rtsp'
+  const hasStream = !!camera
 
   return (
     <Box sx={{ p: 2 }}>
@@ -413,7 +407,6 @@ export function Camera() {
               }}
               onStreamError={() => setStreamError(true)}
               rtmpActive={rtmpActive}
-              cameraType={parsed.type}
               cameraName={camera.name}
               locationName={locationName}
               overlayMatch={activeMatch}

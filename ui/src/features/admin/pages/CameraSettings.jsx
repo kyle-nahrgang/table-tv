@@ -16,10 +16,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   CircularProgress,
 } from '@mui/material'
@@ -35,13 +31,7 @@ import {
   formatCameraType,
 } from '../../../features/cameras/api/cameras.js'
 
-const CAMERA_TYPES = [
-  { value: 'rtsp', label: 'RTSP' },
-  { value: 'internal', label: 'Internal' },
-  { value: 'usb', label: 'USB' },
-]
-
-function CameraForm({ name, type, url, device, onChange }) {
+function CameraForm({ name, url, onChange }) {
   return (
     <Box display="flex" flexDirection="column" gap={2} sx={{ mt: 1 }}>
       <TextField
@@ -51,38 +41,13 @@ function CameraForm({ name, type, url, device, onChange }) {
         required
         fullWidth
       />
-      <FormControl fullWidth>
-        <InputLabel>Type</InputLabel>
-        <Select
-          value={type}
-          label="Type"
-          onChange={(e) => onChange({ type: e.target.value })}
-        >
-          {CAMERA_TYPES.map((t) => (
-            <MenuItem key={t.value} value={t.value}>
-              {t.label}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      {type === 'rtsp' && (
-        <TextField
-          label="RTSP URL"
-          placeholder="rtsp://..."
-          value={url}
-          onChange={(e) => onChange({ url: e.target.value })}
-          fullWidth
-        />
-      )}
-      {type === 'usb' && (
-        <TextField
-          label="Device"
-          placeholder="/dev/video0"
-          value={device}
-          onChange={(e) => onChange({ device: e.target.value })}
-          fullWidth
-        />
-      )}
+      <TextField
+        label="RTSP URL"
+        placeholder="rtsp://..."
+        value={url}
+        onChange={(e) => onChange({ url: e.target.value })}
+        fullWidth
+      />
     </Box>
   )
 }
@@ -93,12 +58,7 @@ export function CameraSettings() {
   const [error, setError] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({
-    name: '',
-    type: 'internal',
-    url: '',
-    device: '',
-  })
+  const [form, setForm] = useState({ name: '', url: '' })
   const [submitLoading, setSubmitLoading] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, camera: null })
 
@@ -121,7 +81,7 @@ export function CameraSettings() {
 
   const openAddDialog = () => {
     setEditingId(null)
-    setForm({ name: '', type: 'internal', url: '', device: '' })
+    setForm({ name: '', url: '' })
     setDialogOpen(true)
   }
 
@@ -130,9 +90,7 @@ export function CameraSettings() {
     setEditingId(camera.id)
     setForm({
       name: camera.name,
-      type: parsed.type,
       url: parsed.url ?? '',
-      device: parsed.device ?? '',
     })
     setDialogOpen(true)
   }
@@ -148,20 +106,9 @@ export function CameraSettings() {
     setError('')
     try {
       if (editingId) {
-        await updateCamera(
-          editingId,
-          form.name.trim(),
-          form.type,
-          form.url,
-          form.device
-        )
+        await updateCamera(editingId, form.name.trim(), form.url)
       } else {
-        await createCamera(
-          form.name.trim(),
-          form.type,
-          form.url,
-          form.device
-        )
+        await createCamera(form.name.trim(), form.url)
       }
       setDialogOpen(false)
       await fetchCameras()
@@ -273,9 +220,7 @@ export function CameraSettings() {
           <DialogContent>
             <CameraForm
               name={form.name}
-              type={form.type}
               url={form.url}
-              device={form.device}
               onChange={handleFormChange}
             />
           </DialogContent>

@@ -16,7 +16,6 @@ import { LiveTimestamp } from '../../../components/LiveTimestamp.jsx'
  * @param {() => void} props.onRetry
  * @param {() => void} props.onStreamError - Called when img fails to load
  * @param {boolean} props.rtmpActive
- * @param {'internal'|'rtsp'} props.cameraType
  * @param {string} props.cameraName
  * @param {string} [props.locationName]
  * @param {Object|null} [props.overlayMatch] - Match to show in score overlay (when !end_time)
@@ -29,7 +28,6 @@ export function StreamPreview({
   onRetry,
   onStreamError,
   rtmpActive,
-  cameraType,
   cameraName,
   locationName,
   overlayMatch,
@@ -39,23 +37,7 @@ export function StreamPreview({
 
   return (
     <Box sx={{ position: 'relative', display: 'inline-block' }}>
-      {rtmpActive && cameraType === 'internal' ? (
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: 640,
-            height: 360,
-            borderRadius: 8,
-            backgroundColor: '#000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'rgba(255,255,255,0.7)',
-          }}
-        >
-          <Typography>Stream is live — preview unavailable</Typography>
-        </Box>
-      ) : streamError ? (
+      {streamError ? (
         <Box
           sx={{
             width: '100%',
@@ -73,9 +55,7 @@ export function StreamPreview({
         >
           <Typography>Stream unavailable</Typography>
           <Typography variant="body2" sx={{ opacity: 0.8 }}>
-            {cameraType === 'rtsp'
-              ? 'Check that the RTSP URL is valid and reachable'
-              : 'Ensure you are logged in and the camera is available'}
+            Check that the RTSP URL is valid and reachable
           </Typography>
           <Button
             size="small"

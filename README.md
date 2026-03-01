@@ -126,8 +126,6 @@ Also enable: Auth0 Dashboard → APIs → [your API] → Settings → Access Set
 
 Set `AUTH0_CONNECTION=facebook` in `.env` to skip the Auth0 method selection page.
 
-**USB webcam:** If you use an external USB webcam instead of the built-in camera, set `CAMERA_INDEX=1` in `.env` (or `0` if the USB cam is the only/first device).
-
 **RTSP cameras:** Add a camera with type RTSP and the stream URL (e.g. `rtsp://192.168.1.100:554/stream`). The stream, match overlay, and RTMP Go Live all work for RTSP. Requires ffmpeg.
 
 ### Test RTSP stream (MediaMTX + FFmpeg)
@@ -158,7 +156,7 @@ paths:
 
 ## RTMP streaming (Go Live)
 
-RTMP export (YouTube, Facebook, etc.) uses **ffmpeg** to read the MJPEG stream and push to RTMP. Works for both internal and RTSP cameras. The API requires ffmpeg to be installed and in `PATH`.
+RTMP export (YouTube, Facebook, etc.) uses **ffmpeg** to read the MJPEG stream and push to RTMP. Works for RTSP cameras. The API requires ffmpeg to be installed and in `PATH`.
 
 - **macOS:** `brew install ffmpeg`
 - **Ubuntu/Debian:** `sudo apt install ffmpeg`

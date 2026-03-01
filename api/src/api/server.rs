@@ -6,7 +6,6 @@ use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use crate::api::{auth, camera, facebook, info, pool_match, settings, user};
-use crate::db::camera::CameraType;
 use crate::db::Db;
 use crate::error::ApiError;
 use crate::video::{self, OverlayState};
@@ -19,7 +18,6 @@ pub struct AppState {
     pub overlay: OverlayState,
     pub facebook_tokens: facebook::FacebookTokenCache,
     pub rtmp_processes: crate::video::RtmpState,
-    pub preview_ffmpeg: crate::video::PreviewFfmpegHandle,
     pub jwks: Option<Arc<auth::JwksCache>>,
     /// Token for server-side stream access (RTMP pipeline). Env STREAM_TOKEN or random at startup.
     pub stream_token: String,
@@ -29,11 +27,9 @@ impl ApiServer {
     fn router(db: Db) -> Router {
         let overlay: OverlayState = Arc::new(RwLock::new(None));
         let rtmp_processes = crate::video::rtmp_state_new();
-        let preview_ffmpeg = Arc::new(RwLock::new(None));
         if db.list_cameras().map_or(false, |cams| {
-            cams.iter().any(|c| c.camera_type.is_internal())
+            cams.iter().any(|c| c.camera_type.is_rtsp())
         }) {
-            video::ensure_internal_camera_ready(overlay.clone(), preview_ffmpeg.clone());
             video::restore_overlay_from_db(&db, &overlay, &rtmp_processes);
             video::spawn_overlay_refresh_task(db.clone(), overlay.clone(), rtmp_processes.clone());
         }
@@ -59,7 +55,6 @@ impl ApiServer {
             overlay: overlay.clone(),
             facebook_tokens: facebook::FacebookTokenCache::new(),
             rtmp_processes,
-            preview_ffmpeg,
             jwks,
             stream_token,
         };

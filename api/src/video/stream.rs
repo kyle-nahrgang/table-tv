@@ -1,4 +1,4 @@
-//! Internal camera capture and streaming via FFmpeg (avfoundation on macOS, v4l2 on Linux).
+//! Camera stream and RTMP handlers. Supports RTSP cameras only.
 
 use axum::{
     body::Body,
@@ -7,148 +7,17 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
-use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, RwLock};
-use tokio::sync::broadcast;
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
 use crate::api::auth::{AuthenticatedUser, StreamAuth};
 use crate::api::AppState;
 use crate::db::camera::CameraType;
 use crate::error::ApiError;
-use crate::video::{mjpeg, overlay, rtmp, rtsp_camera, CameraSource};
+use crate::video::{overlay, rtmp, rtsp_camera, CameraSource};
 
 const MJPEG_BOUNDARY: &str = "frame";
 
-static INTERNAL_CAMERA: RwLock<Option<Arc<InternalCameraState>>> = RwLock::new(None);
-
-/// Shared state for the internal camera stream.
-pub struct InternalCameraState {
-    tx: broadcast::Sender<Bytes>,
-}
-
-impl CameraSource for InternalCameraState {
-    fn subscribe(&self) -> broadcast::Receiver<Bytes> {
-        self.tx.subscribe()
-    }
-}
-
-/// Spawn FFmpeg to capture camera and output MJPEG to stdout.
-/// macOS: avfoundation. Linux: v4l2.
-fn spawn_preview_ffmpeg(camera_index: u32) -> Option<Child> {
-    let cam_idx = std::env::var("CAMERA_INDEX")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(camera_index);
-
-    let child = if cfg!(target_os = "macos") {
-        Command::new("ffmpeg")
-            .args([
-                "-y",
-                "-f",
-                "avfoundation",
-                "-framerate",
-                "30",
-                "-video_device_index",
-                &cam_idx.to_string(),
-                "-i",
-                "0:none",
-                "-f",
-                "mjpeg",
-                "-q:v",
-                "5",
-                "-",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-    } else {
-        let device = std::env::var("VIDEO_DEVICE").unwrap_or_else(|_| "/dev/video0".to_string());
-        Command::new("ffmpeg")
-            .args([
-                "-y",
-                "-f",
-                "v4l2",
-                "-input_format",
-                "mjpeg",
-                "-framerate",
-                "30",
-                "-i",
-                &device,
-                "-f",
-                "mjpeg",
-                "-q:v",
-                "5",
-                "-",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-    };
-
-    match child {
-        Ok(mut c) => {
-            if let Some(stdout) = c.stdout.take() {
-                let (tx, _) = broadcast::channel(16);
-                let state = Arc::new(InternalCameraState { tx: tx.clone() });
-                *INTERNAL_CAMERA.write().unwrap() = Some(state);
-                std::thread::spawn(move || mjpeg::extract_jpeg_frames(stdout, tx));
-            }
-            Some(c)
-        }
-        Err(e) => {
-            tracing::warn!(
-                "FFmpeg camera capture not available (expected in Docker): {}",
-                e
-            );
-            None
-        }
-    }
-}
-
-/// Stop the preview FFmpeg so RTMP can use the camera. Returns after process exits.
-fn stop_preview_ffmpeg(handle: &PreviewFfmpegHandle) {
-    if let Some(mut child) = handle.write().unwrap().take() {
-        let _ = child.kill();
-        let _ = child.wait();
-        *INTERNAL_CAMERA.write().unwrap() = None;
-        tracing::info!("Preview FFmpeg stopped for RTMP");
-    }
-    std::thread::sleep(std::time::Duration::from_secs(1));
-}
-
-/// Handle to the preview FFmpeg process. Stored in app state for coordination with RTMP.
-pub type PreviewFfmpegHandle = Arc<RwLock<Option<Child>>>;
-
-fn get_or_init_camera(
-    _overlay: overlay::OverlayState,
-    preview_handle: PreviewFfmpegHandle,
-) -> Option<Arc<InternalCameraState>> {
-    {
-        let guard = INTERNAL_CAMERA.read().unwrap();
-        if let Some(ref state) = *guard {
-            return Some(Arc::clone(state));
-        }
-    }
-    let cam_idx = std::env::var("CAMERA_INDEX")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-    if let Some(child) = spawn_preview_ffmpeg(cam_idx) {
-        *preview_handle.write().unwrap() = Some(child);
-    }
-    INTERNAL_CAMERA.read().unwrap().clone()
-}
-
-/// Pre-initialize the internal camera at startup.
-pub fn ensure_internal_camera_ready(
-    overlay: overlay::OverlayState,
-    preview_handle: PreviewFfmpegHandle,
-) {
-    let _ = get_or_init_camera(overlay, preview_handle);
-}
-
-/// GET /api/cameras/:id/stream - MJPEG stream for internal and RTSP cameras.
+/// GET /api/cameras/:id/stream - MJPEG stream for RTSP cameras.
 /// Accepts either Bearer token (browser) or ?stream_token= (RTMP pipeline).
 pub async fn camera_stream(
     _auth: StreamAuth,
@@ -165,17 +34,6 @@ pub async fn camera_stream(
         .ok_or(ApiError::CameraNotFound)?;
 
     let rx = match &camera.camera_type {
-        CameraType::Internal => {
-            let s = match get_or_init_camera(app.overlay.clone(), app.preview_ffmpeg.clone()) {
-                Some(s) => s,
-                None => {
-                    return Err(ApiError::BadRequest(
-                        "Internal camera not available. Ensure ffmpeg is installed.".to_string(),
-                    ));
-                }
-            };
-            s.subscribe()
-        }
         CameraType::Rtsp { url } => {
             let url = url.trim();
             if url.is_empty() {
@@ -193,12 +51,8 @@ pub async fn camera_stream(
             };
             s.subscribe()
         }
-        _ => {
-            return Err(ApiError::BadRequest(
-                "Stream only available for internal and RTSP cameras.".to_string(),
-            ));
-        }
     };
+
     let stream = BroadcastStream::new(rx)
         .map(|x| match x {
             Ok(bytes) => Ok(bytes),
@@ -263,10 +117,9 @@ pub async fn camera_stream_rtmp_start(
         .find_camera_by_id(&id)?
         .ok_or(ApiError::CameraNotFound)?;
 
-    let is_rtsp = camera.camera_type.is_rtsp();
-    if !camera.camera_type.is_internal() && !is_rtsp {
+    if !camera.camera_type.is_rtsp() {
         return Err(ApiError::BadRequest(
-            "RTMP export only available for internal and RTSP cameras.".to_string(),
+            "RTMP export only available for RTSP cameras.".to_string(),
         ));
     }
 
@@ -287,16 +140,6 @@ pub async fn camera_stream_rtmp_start(
     let location_name = settings.location_name.as_str();
     let camera_name = camera.name.as_str();
 
-    let cam_idx = std::env::var("CAMERA_INDEX")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
-
-    // For internal camera only: stop preview FFmpeg so RTMP can use the physical device
-    if !is_rtsp {
-        stop_preview_ffmpeg(&app.preview_ffmpeg);
-    }
-
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let stream_url = format!(
         "http://127.0.0.1:{}/api/cameras/{}/stream?stream_token={}",
@@ -308,35 +151,27 @@ pub async fn camera_stream_rtmp_start(
     let (stop_tx, stop_rx) = std::sync::mpsc::channel();
     let rtmp = app.rtmp_processes.clone();
     let id_clone = id.clone();
-    let rtmp_url = req.url.clone();
-    let preview_handle = app.preview_ffmpeg.clone();
 
     match rtmp::spawn_rtmp_pipeline(
         &stream_url,
-        &rtmp_url,
+        &req.url,
         stop_rx,
         rtmp.clone(),
         id_clone,
         &overlay_path,
-        cam_idx,
-        is_rtsp, // Use MJPEG from stream URL for RTSP (no direct capture)
         location_name,
         camera_name,
     ) {
         Ok(()) => {
             rtmp.write()
                 .unwrap()
-                .insert(id.clone(), (stop_tx, rtmp_url));
+                .insert(id.clone(), (stop_tx, req.url.clone()));
             tracing::info!("RTMP start: ffmpeg pipeline started successfully");
             Ok(axum::Json(
                 serde_json::json!({ "ok": true, "message": "RTMP stream started" }),
             ))
         }
         Err(e) => {
-            // Restart internal camera preview on failure (RTSP has no preview to restart)
-            if !is_rtsp {
-                let _ = get_or_init_camera(app.overlay.clone(), preview_handle);
-            }
             tracing::error!(error = %e, "RTMP start: failed to start ffmpeg pipeline");
             Err(ApiError::BadRequest(format!(
                 "Failed to start ffmpeg pipeline: {}. Ensure ffmpeg is installed.",
@@ -367,12 +202,6 @@ pub async fn camera_stream_rtmp_stop(
 
     std::thread::sleep(std::time::Duration::from_secs(2));
 
-    // Restart internal camera preview (RTSP has no preview to restart)
-    if let Ok(Some(camera)) = app.db.find_camera_by_id(&id) {
-        if camera.camera_type.is_internal() {
-            let _ = get_or_init_camera(app.overlay.clone(), app.preview_ffmpeg.clone());
-        }
-    }
     tracing::info!(camera_id = %id, "RTMP stop: stream stopped");
 
     Ok(axum::Json(
