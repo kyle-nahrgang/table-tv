@@ -5,8 +5,9 @@ import { useAuth } from '../../../authStore.jsx'
 import { ServerSettings } from './ServerSettings'
 import { CameraSettings } from './CameraSettings'
 import { MatchesSettings } from './MatchesSettings'
+import { UserManagement } from './UserManagement'
 
-const TAB_PATHS = ['/admin/server-settings', '/admin/camera-settings', '/admin/matches']
+const TAB_PATHS = ['/admin/server-settings', '/admin/camera-settings', '/admin/matches', '/admin/users']
 
 export function Admin() {
   const navigate = useNavigate()
@@ -57,10 +58,12 @@ export function Admin() {
         <Tab label="Server Settings" />
         <Tab label="Camera Settings" />
         <Tab label="Matches" />
+        <Tab label="Users" />
       </Tabs>
       {tabIndex === 0 && <ServerSettings />}
       {tabIndex === 1 && <CameraSettings />}
       {tabIndex === 2 && <MatchesSettings />}
+      {tabIndex === 3 && <UserManagement />}
     </Box>
   )
 }

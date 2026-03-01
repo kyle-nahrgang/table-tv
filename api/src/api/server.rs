@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use crate::api::{auth, camera, facebook, info, pool_match, settings};
+use crate::api::{auth, camera, facebook, info, pool_match, settings, user};
 use crate::db::camera::CameraType;
 use crate::db::Db;
 use crate::error::ApiError;
@@ -27,24 +27,6 @@ pub struct AppState {
 
 impl ApiServer {
     fn router(db: Db) -> Router {
-        // Optionally create a test RTSP camera when TEST_RTSP_STREAM is set
-        if std::env::var("TEST_RTSP_STREAM").is_ok_and(|v| {
-            !v.is_empty() && v != "0" && !v.eq_ignore_ascii_case("false")
-        }) {
-            let test_url = std::env::var("TEST_RTSP_STREAM_URL")
-                .unwrap_or_else(|_| "rtsp://127.0.0.1:8554/test".to_string());
-            if db.find_camera_by_name("Test RTSP").ok().flatten().is_none() {
-                if let Err(e) = db.create_camera(
-                    "Test RTSP".to_string(),
-                    CameraType::Rtsp { url: test_url },
-                ) {
-                    tracing::warn!(error = %e, "Failed to create test RTSP camera");
-                } else {
-                    tracing::info!("Created test RTSP camera");
-                }
-            }
-        }
-
         let overlay: OverlayState = Arc::new(RwLock::new(None));
         let rtmp_processes = crate::video::rtmp_state_new();
         let preview_ffmpeg = Arc::new(RwLock::new(None));
@@ -90,6 +72,7 @@ impl ApiServer {
             .merge(facebook::routes())
             .merge(info::routes())
             .merge(settings::routes())
+            .merge(user::routes())
             .layer(TraceLayer::new_for_http())
             .with_state(app_state);
 

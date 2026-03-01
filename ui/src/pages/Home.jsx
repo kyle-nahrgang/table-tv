@@ -22,7 +22,7 @@ import { formatTime, getMatchWinner } from '../utils/format.js'
 export function Home() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, isAdmin } = useAuth()
   const [cameras, setCameras] = useState([])
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +48,13 @@ export function Home() {
     fetch()
     return () => { cancelled = true }
   }, [isLoggedIn])
+
+  // Direct admin to configure a camera when none exist
+  useEffect(() => {
+    if (isAdmin && !loading && cameras.length === 0) {
+      navigate('/admin/camera-settings', { replace: true })
+    }
+  }, [isAdmin, loading, cameras.length, navigate])
 
   const fetchMatches = useCallback(async () => {
     setMatchesLoading(true)
@@ -79,13 +86,6 @@ export function Home() {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Home
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        Welcome to Table TV.
-      </Typography>
-
       <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
         <Typography variant="h6" component="h2">
           Matches

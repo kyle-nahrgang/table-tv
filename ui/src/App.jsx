@@ -7,6 +7,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { useAuth } from './authStore.jsx'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
+import { GettingStarted } from './pages/GettingStarted'
 import { Camera, Match } from './features/cameras'
 import { Admin } from './features/admin'
 import { FacebookCallback } from './pages/FacebookCallback'
@@ -37,7 +38,7 @@ const LOADING_TIMEOUT_MS = 15000
 
 function App() {
   const location = useLocation()
-  const { initialized, loading, retrying, refetch } = useApiInfo()
+  const { initialized, hasUsers, loading, retrying, refetch } = useApiInfo()
   const { isLoading: auth0Loading, error: auth0Error } = useAuth0()
   const [loadingTimedOut, setLoadingTimedOut] = useState(false)
 
@@ -127,6 +128,11 @@ function App() {
     )
   }
 
+  // No users yet: show getting started
+  if (!hasUsers) {
+    return <GettingStarted />
+  }
+
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
@@ -137,6 +143,7 @@ function App() {
         <Route path="admin/server-settings" element={<Admin />} />
         <Route path="admin/camera-settings" element={<Admin />} />
         <Route path="admin/matches" element={<Admin />} />
+        <Route path="admin/users" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

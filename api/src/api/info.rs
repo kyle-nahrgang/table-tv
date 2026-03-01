@@ -9,15 +9,20 @@ pub struct ApiServerInfo {
     pub initialized: bool,
     #[serde(default)]
     pub location_name: String,
+    /// True if at least one user has registered (signed in).
+    #[serde(default)]
+    pub has_users: bool,
 }
 
 /// GET /api/info - Returns server info. `initialized` is true when Auth0 is configured (no registration gate).
 pub async fn info(State(app): State<AppState>) -> Result<axum::Json<ApiServerInfo>, ApiError> {
     let initialized = app.jwks.is_some();
     let settings = app.db.get_settings().unwrap_or_default();
+    let has_users = app.db.has_admin().unwrap_or(false);
     Ok(axum::Json(ApiServerInfo {
         initialized,
         location_name: settings.location_name,
+        has_users,
     }))
 }
 

@@ -35,6 +35,51 @@ impl Db {
         }
     }
 
+    /// List all users.
+    pub fn list_users(&self) -> Result<Vec<UserDoc>, ApiError> {
+        let conn = self.0.lock().map_err(|e| ApiError::Unknown(e.to_string()))?;
+        let mut stmt = conn.prepare("SELECT auth0_sub, email, is_admin FROM users ORDER BY email")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(UserDoc {
+                auth0_sub: row.get(0)?,
+                email: row.get(1)?,
+                is_admin: row.get::<_, i64>(2)? != 0,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(ApiError::from)
+    }
+
+    /// Set admin status for a user. Fails if trying to remove the last admin.
+    pub fn set_user_admin(&self, auth0_sub: &str, is_admin: bool) -> Result<UserDoc, ApiError> {
+        let existing = self
+            .find_user_by_sub(auth0_sub)?
+            .ok_or_else(|| ApiError::BadRequest("User not found".to_string()))?;
+
+        let conn = self.0.lock().map_err(|e| ApiError::Unknown(e.to_string()))?;
+        if !is_admin && existing.is_admin {
+            let admin_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM users WHERE is_admin = 1",
+                [],
+                |row| row.get(0),
+            )?;
+            if admin_count <= 1 {
+                return Err(ApiError::BadRequest(
+                    "Cannot remove the last admin. Promote another user first.".to_string(),
+                ));
+            }
+        }
+
+        conn.execute(
+            "UPDATE users SET is_admin = ?1 WHERE auth0_sub = ?2",
+            rusqlite::params![is_admin as i64, auth0_sub],
+        )?;
+        Ok(UserDoc {
+            auth0_sub: existing.auth0_sub,
+            email: existing.email,
+            is_admin,
+        })
+    }
+
     /// Create or update a user. First user becomes admin.
     pub fn upsert_user(&self, auth0_sub: String, email: String) -> Result<UserDoc, ApiError> {
         if let Some(existing) = self.find_user_by_sub(&auth0_sub)? {
