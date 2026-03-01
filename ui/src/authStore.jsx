@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
+import { setTokenGetter } from './apiClient.js'
 
 /**
  * Fetches current user from backend (validates token, syncs to DB, returns isAdmin).
  * @param {string} accessToken - Bearer token from Auth0
- * @returns {Promise<{ sub: string, email: string, is_admin: boolean }>}
+ * @returns {Promise<{ sub: string, email: string, name: string, picture?: string, is_admin: boolean }>}
  */
 export async function fetchAuthMe(accessToken) {
   const res = await fetch('/api/auth/me', {
@@ -59,6 +60,27 @@ export function AuthProvider({ children }) {
     loadUser()
   }, [loadUser])
 
+  // Register token getter for apiClient so all API calls include the Bearer token
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setTokenGetter(null)
+      return
+    }
+    const useIdToken = import.meta.env.AUTH0_SKIP_AUDIENCE === 'true'
+    setTokenGetter(async () => {
+      try {
+        if (useIdToken) {
+          const claims = await getIdTokenClaims()
+          return claims?.__raw ?? null
+        }
+        return await getAccessTokenSilently()
+      } catch {
+        return null
+      }
+    })
+    return () => setTokenGetter(null)
+  }, [isAuthenticated, getAccessTokenSilently, getIdTokenClaims])
+
   const logout = useCallback(() => {
     setUser(null)
     auth0Logout({ logoutParams: { returnTo: window.location.origin } })
@@ -83,7 +105,7 @@ export function AuthProvider({ children }) {
 
 /**
  * Hook that provides auth state. Must be used within AuthProvider (inside Auth0Provider).
- * @returns {{ user: { sub, email, is_admin } | null, loading: boolean, error: string | null, isLoggedIn: boolean, isAdmin: boolean, logout: () => void, refetch: () => void }}
+ * @returns {{ user: { sub, email, name, picture?, is_admin } | null, loading: boolean, error: string | null, isLoggedIn: boolean, isAdmin: boolean, logout: () => void, refetch: () => void }}
  */
 export function useAuth() {
   const ctx = useContext(AuthContext)

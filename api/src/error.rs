@@ -44,6 +44,9 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
+        if status == StatusCode::INTERNAL_SERVER_ERROR {
+            tracing::error!(error = %message, "API returned 500");
+        }
         (status, message).into_response()
     }
 }

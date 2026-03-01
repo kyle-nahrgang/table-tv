@@ -47,6 +47,10 @@ fn init_ssl_certs_macos() {}
 async fn main() -> Result<(), crate::error::ApiError> {
     init_ssl_certs_macos();
     dotenvy::dotenv().ok();
+    // When running from api/, also try parent .env (workspace root)
+    if std::env::var("AUTH0_DOMAIN").is_err() {
+        let _ = dotenvy::from_path(std::path::Path::new("../.env"));
+    }
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tower_http=debug")))
         .with(tracing_subscriber::fmt::layer())

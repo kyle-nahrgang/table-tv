@@ -63,6 +63,33 @@ The first user to log in becomes an admin.
 
 5. **Wrong client ID** – If Auth0 receives a different client ID than in `.env`: shell env vars override `.env`; check for `.env.local` or `.env.development`; restart the dev server. In dev mode, the console logs `[Auth0] Client ID loaded: xxxxxxxx...` so you can verify.
 
+### Auth0 claims (username, email, profile picture)
+
+The app requests `scope: 'openid profile email'`, which includes standard OIDC claims: `name`, `nickname`, `email`, `picture`. For social logins (Facebook, Google), these may be empty if the identity provider doesn’t share them.
+
+**To add or fix claims in the token:**
+
+1. **Auth0 Actions** – Dashboard → Actions → Flows → Login. Add a new Action that runs on “Login / Post Login”:
+
+   ```javascript
+   exports.onExecutePostLogin = async (event, api) => {
+     const user = event.user;
+     const name = user.name || (user.identities?.[0]?.profile_data?.name);
+     if (name) api.idToken.setCustomClaim('name', name);
+     if (user.email) api.idToken.setCustomClaim('email', user.email);
+     if (user.picture) api.idToken.setCustomClaim('picture', user.picture);
+     if (user.nickname) api.idToken.setCustomClaim('nickname', user.nickname);
+   };
+   ```
+
+2. **Log out and log back in** – The Action only runs on new logins; your current token won't have the claims until you sign in again.
+
+3. **Social connection settings** – Dashboard → Authentication → Social. For each connection (Facebook, Google, etc.), ensure the requested attributes include name, email, and profile picture.
+
+4. **Facebook** – In the Facebook connection, use only `public_profile` and `email`. Remove `user_link` and any other invalid scopes. If you see "Invalid Scopes: email, user_link":
+   - **Auth0**: Dashboard → Authentication → Social → Facebook → edit the connection. Set permissions to `public_profile,email` only.
+   - **Meta for Developers**: Your Facebook app → Use cases → Authentication and account creation → add the `email` permission if needed.
+
 **USB webcam:** If you use an external USB webcam instead of the built-in camera, set `CAMERA_INDEX=1` in `.env` (or `0` if the USB cam is the only/first device).
 
 ## RTMP streaming (Go Live)

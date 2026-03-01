@@ -16,7 +16,7 @@ export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { loginWithRedirect } = useAuth0()
-  const { isLoggedIn, isAdmin, logout } = useAuth()
+  const { user, isLoggedIn, isAdmin, logout } = useAuth()
   const { locationName } = useApiInfo()
 
   const handleLogin = () => {
@@ -54,9 +54,22 @@ export function Layout() {
           )}
           <Box sx={{ flexGrow: 1 }} />
           {isLoggedIn ? (
-            <Button color="inherit" onClick={logout}>
-              Log out
-            </Button>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {user?.picture && (
+                <Box
+                  component="img"
+                  src={user.picture}
+                  alt=""
+                  sx={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
+                />
+              )}
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                {user?.name || user?.email}
+              </Typography>
+              <Button color="inherit" onClick={logout}>
+                Log out
+              </Button>
+            </Box>
           ) : (
             <Button color="inherit" onClick={handleLogin}>
               Log in

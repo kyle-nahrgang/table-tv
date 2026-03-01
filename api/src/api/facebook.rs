@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use uuid::Uuid;
 
+use crate::api::auth::AuthenticatedUser;
 use crate::api::AppState;
 use crate::error::ApiError;
 
@@ -220,7 +221,9 @@ pub async fn facebook_exchange_code(
 }
 
 /// GET /api/facebook/status - Returns whether Facebook Live (OAuth) is configured.
-pub async fn facebook_status() -> Result<Json<serde_json::Value>, ApiError> {
+pub async fn facebook_status(
+    _auth: AuthenticatedUser,
+) -> Result<Json<serde_json::Value>, ApiError> {
     let app_id = std::env::var("FACEBOOK_APP_ID").ok();
     let app_secret = std::env::var("FACEBOOK_APP_SECRET").ok();
     let base_url = std::env::var("BASE_URL").ok();
@@ -248,6 +251,7 @@ pub struct FacebookLiveUrlRequest {
 
 /// POST /api/facebook/live-url - Creates a Facebook Live video and returns the stream URL.
 pub async fn facebook_live_url(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     axum::Json(req): axum::Json<FacebookLiveUrlRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {

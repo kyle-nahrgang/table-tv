@@ -6,6 +6,7 @@ use axum::{
 use polodb_core::bson::{oid::ObjectId, DateTime};
 use serde::{Deserialize, Serialize};
 
+use crate::api::auth::AuthenticatedUser;
 use crate::api::AppState;
 use crate::db::pool_match::{MatchPlayer, PoolMatch, PoolMatchDoc, Rating};
 use crate::error::ApiError;
@@ -118,6 +119,7 @@ pub struct ActiveMatchQuery {
 
 /// GET /api/pool-matches/active?camera_name=X - Get the active (ongoing) match for a camera.
 pub async fn pool_matches_active(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Query(q): Query<ActiveMatchQuery>,
 ) -> Result<Json<Option<PoolMatchResponse>>, ApiError> {
@@ -127,6 +129,7 @@ pub async fn pool_matches_active(
 
 /// GET /api/pool-matches - List all pool matches.
 pub async fn pool_matches_list(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
 ) -> Result<Json<Vec<PoolMatchResponse>>, ApiError> {
     let matches = app.db.list_pool_matches()?;
@@ -139,6 +142,7 @@ pub async fn pool_matches_list(
 
 /// GET /api/pool-matches/:id - Get a pool match by id.
 pub async fn pool_matches_get(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PoolMatchResponse>, ApiError> {
@@ -152,6 +156,7 @@ pub async fn pool_matches_get(
 
 /// POST /api/pool-matches - Create a new pool match.
 pub async fn pool_matches_create(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Json(req): Json<PoolMatchCreateRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -202,6 +207,7 @@ pub async fn pool_matches_create(
 
 /// PATCH /api/pool-matches/:id/score - Update games_won for a player. Sets end_time when games_won == race_to.
 pub async fn pool_matches_update_score(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<PoolMatchUpdateScoreRequest>,
@@ -230,6 +236,7 @@ pub async fn pool_matches_update_score(
 
 /// PATCH /api/pool-matches/:id/end - End the match early (set end_time).
 pub async fn pool_matches_end(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PoolMatchResponse>, ApiError> {
@@ -248,6 +255,7 @@ pub async fn pool_matches_end(
 
 /// DELETE /api/pool-matches/:id - Delete a pool match.
 pub async fn pool_matches_delete(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {

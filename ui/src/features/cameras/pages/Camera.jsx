@@ -29,6 +29,7 @@ import LiveTvIcon from '@mui/icons-material/LiveTv'
 import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, parseCameraType, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
 import { getActiveMatch, createMatch, updateScore, endMatch } from '../api/poolMatches.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
+import { getToken, urlWithToken } from '../../../apiClient.js'
 
 function formatCameraType(cameraType) {
   const parsed = parseCameraType(cameraType)
@@ -37,9 +38,6 @@ function formatCameraType(cameraType) {
   return { label: 'Internal', detail: null }
 }
 
-function getStreamUrl(id) {
-  return `/api/cameras/${id}/stream`
-}
 
 function LiveTimestamp() {
   const [now, setNow] = useState(() => new Date())
@@ -80,6 +78,20 @@ export function Camera() {
   const [rtmpActive, setRtmpActive] = useState(false)
   const [rtmpStopping, setRtmpStopping] = useState(false)
   const [facebookConfigured, setFacebookConfigured] = useState(false)
+  const [streamUrl, setStreamUrl] = useState('')
+  const [streamError, setStreamError] = useState(false)
+
+  useEffect(() => {
+    if (!camera?.id || parseCameraType(camera?.camera_type).type !== 'internal') return
+    setStreamError(false)
+    let cancelled = false
+    getToken().then((token) => {
+      if (!cancelled) {
+        setStreamUrl(urlWithToken(`/api/cameras/${camera.id}/stream`, token))
+      }
+    })
+    return () => { cancelled = true }
+  }, [camera?.id, camera?.camera_type])
 
   const fetchActiveMatch = useCallback(async () => {
     if (!camera?.name) return
@@ -388,11 +400,30 @@ export function Camera() {
                 >
                   <Typography>Stream is live — preview unavailable</Typography>
                 </Box>
-              ) : (
+              ) : streamError ? (
+                <Box
+                  sx={{
+                    width: '100%',
+                    maxWidth: 640,
+                    aspectRatio: '16/9',
+                    borderRadius: 8,
+                    backgroundColor: '#000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.7)',
+                    flexDirection: 'column',
+                    gap: 1,
+                  }}
+                >
+                  <Typography>Log in to view stream</Typography>
+                </Box>
+              ) : streamUrl ? (
                 <>
               <img
-                src={getStreamUrl(camera.id)}
+                src={streamUrl}
                 alt={`${camera.name} live stream`}
+                onError={() => setStreamError(true)}
                 style={{
                   width: '100%',
                   maxWidth: 640,
@@ -520,6 +551,22 @@ export function Camera() {
               </Box>
             )}
                 </>
+              ) : (
+                <Box
+                  sx={{
+                    width: '100%',
+                    maxWidth: 640,
+                    aspectRatio: '16/9',
+                    borderRadius: 8,
+                    backgroundColor: '#000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.7)',
+                  }}
+                >
+                  <CircularProgress size={32} />
+                </Box>
               )}
             </Box>
           </Box>

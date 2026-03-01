@@ -1,6 +1,7 @@
 /**
  * Pool match API client.
  */
+import { fetchWithAuth } from '../../../apiClient.js'
 
 /**
  * @typedef {Object} MatchPlayer
@@ -24,7 +25,7 @@
  * @returns {Promise<PoolMatch[]>}
  */
 export async function listMatches() {
-  const res = await fetch('/api/pool-matches')
+  const res = await fetchWithAuth('/api/pool-matches')
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to list matches')
@@ -37,7 +38,7 @@ export async function listMatches() {
  * @returns {Promise<PoolMatch | null>}
  */
 export async function getActiveMatch(cameraName) {
-  const res = await fetch(`/api/pool-matches/active?camera_name=${encodeURIComponent(cameraName)}`)
+  const res = await fetchWithAuth(`/api/pool-matches/active?camera_name=${encodeURIComponent(cameraName)}`)
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to fetch active match')
@@ -51,7 +52,7 @@ export async function getActiveMatch(cameraName) {
  * @returns {Promise<{ id: string }>}
  */
 export async function createMatch(payload) {
-  const res = await fetch('/api/pool-matches', {
+  const res = await fetchWithAuth('/api/pool-matches', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -70,7 +71,7 @@ export async function createMatch(payload) {
  * @returns {Promise<PoolMatch>}
  */
 export async function updateScore(matchId, player, gamesWon) {
-  const res = await fetch(`/api/pool-matches/${matchId}/score`, {
+  const res = await fetchWithAuth(`/api/pool-matches/${matchId}/score`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ player, games_won: gamesWon }),
@@ -87,7 +88,7 @@ export async function updateScore(matchId, player, gamesWon) {
  * @returns {Promise<void>}
  */
 export async function deleteMatch(matchId) {
-  const res = await fetch(`/api/pool-matches/${matchId}`, { method: 'DELETE' })
+  const res = await fetchWithAuth(`/api/pool-matches/${matchId}`, { method: 'DELETE' })
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to delete match')
@@ -99,7 +100,7 @@ export async function deleteMatch(matchId) {
  * @returns {Promise<PoolMatch>}
  */
 export async function endMatch(matchId) {
-  const res = await fetch(`/api/pool-matches/${matchId}/end`, {
+  const res = await fetchWithAuth(`/api/pool-matches/${matchId}/end`, {
     method: 'PATCH',
   })
   if (!res.ok) {

@@ -2,6 +2,7 @@
  * Camera API client.
  * Camera types: Rtsp { url }, Internal, Usb { device }
  */
+import { fetchWithAuth } from '../../../apiClient.js'
 
 /**
  * @typedef {'rtsp' | 'internal' | 'usb'} CameraTypeKey
@@ -56,7 +57,7 @@ export function parseCameraType(cameraType) {
  * @returns {Promise<Camera[]>}
  */
 export async function listCameras() {
-  const res = await fetch('/api/cameras')
+  const res = await fetchWithAuth('/api/cameras')
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to list cameras')
@@ -69,7 +70,7 @@ export async function listCameras() {
  * @returns {Promise<Camera>}
  */
 export async function getCamera(id) {
-  const res = await fetch(`/api/cameras/${id}`)
+  const res = await fetchWithAuth(`/api/cameras/${id}`)
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to fetch camera')
@@ -85,7 +86,7 @@ export async function getCamera(id) {
  * @returns {Promise<{ id: string }>}
  */
 export async function createCamera(name, type, url = '', device = '') {
-  const res = await fetch('/api/cameras', {
+  const res = await fetchWithAuth('/api/cameras', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -109,7 +110,7 @@ export async function createCamera(name, type, url = '', device = '') {
  * @returns {Promise<void>}
  */
 export async function updateCamera(id, name, type, url = '', device = '') {
-  const res = await fetch(`/api/cameras/${id}`, {
+  const res = await fetchWithAuth(`/api/cameras/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -128,7 +129,7 @@ export async function updateCamera(id, name, type, url = '', device = '') {
  * @returns {Promise<void>}
  */
 export async function deleteCamera(id) {
-  const res = await fetch(`/api/cameras/${id}`, { method: 'DELETE' })
+  const res = await fetchWithAuth(`/api/cameras/${id}`, { method: 'DELETE' })
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to delete camera')
@@ -140,7 +141,7 @@ export async function deleteCamera(id) {
  * @returns {Promise<{ configured: boolean, redirect_uri?: string }>}
  */
 export async function getFacebookStatus() {
-  const res = await fetch('/api/facebook/status')
+  const res = await fetchWithAuth('/api/facebook/status')
   if (!res.ok) throw new Error('Failed to check Facebook status')
   return res.json()
 }
@@ -152,7 +153,7 @@ export async function getFacebookStatus() {
  * @returns {Promise<{ url: string, live_video_id?: string }>}
  */
 export async function getFacebookLiveUrl(options = {}) {
-  const res = await fetch('/api/facebook/live-url', {
+  const res = await fetchWithAuth('/api/facebook/live-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(options),
@@ -172,7 +173,7 @@ export async function getFacebookLiveUrl(options = {}) {
  * @returns {Promise<{ ok: boolean }>}
  */
 export async function startRtmpStream(cameraId, rtmpUrl) {
-  const res = await fetch(`/api/cameras/${cameraId}/stream/rtmp`, {
+  const res = await fetchWithAuth(`/api/cameras/${cameraId}/stream/rtmp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: rtmpUrl }),
@@ -190,7 +191,7 @@ export async function startRtmpStream(cameraId, rtmpUrl) {
  * @returns {Promise<{ ok: boolean }>}
  */
 export async function stopRtmpStream(cameraId) {
-  const res = await fetch(`/api/cameras/${cameraId}/stream/rtmp/stop`, {
+  const res = await fetchWithAuth(`/api/cameras/${cameraId}/stream/rtmp/stop`, {
     method: 'POST',
   })
   if (!res.ok) {
@@ -206,7 +207,7 @@ export async function stopRtmpStream(cameraId) {
  * @returns {Promise<{ active: boolean }>}
  */
 export async function getRtmpStreamStatus(cameraId) {
-  const res = await fetch(`/api/cameras/${cameraId}/stream/rtmp/status`)
+  const res = await fetchWithAuth(`/api/cameras/${cameraId}/stream/rtmp/status`)
   if (!res.ok) throw new Error('Failed to get RTMP status')
   return res.json()
 }

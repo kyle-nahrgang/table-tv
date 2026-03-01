@@ -49,6 +49,7 @@ function AppWithProviders() {
     <Auth0Provider
       domain={domain}
       clientId={clientId}
+      cacheLocation="localstorage"
       authorizationParams={{
         redirect_uri: redirectUri,
         audience: skipAudience ? undefined : (audience || undefined),

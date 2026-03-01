@@ -14,6 +14,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 
+use crate::api::auth::AuthenticatedUser;
 use crate::api::AppState;
 use crate::error::ApiError;
 use crate::video::{overlay, rtmp, CameraSource};
@@ -171,6 +172,7 @@ pub fn ensure_internal_camera_ready(overlay: overlay::OverlayState, preview_hand
 
 /// GET /api/cameras/:id/stream - MJPEG stream for internal cameras.
 pub async fn camera_stream(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Response, ApiError> {
@@ -242,6 +244,7 @@ pub async fn camera_stream(
 
 /// POST /api/cameras/:id/stream/rtmp - Start RTMP push to the given URL.
 pub async fn camera_stream_rtmp_start(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
     axum::Json(req): axum::Json<rtmp::RtmpStartRequest>,
@@ -332,6 +335,7 @@ pub async fn camera_stream_rtmp_start(
 
 /// POST /api/cameras/:id/stream/rtmp/stop - Stop the RTMP stream for this camera.
 pub async fn camera_stream_rtmp_stop(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<axum::Json<serde_json::Value>, ApiError> {
@@ -361,6 +365,7 @@ pub async fn camera_stream_rtmp_stop(
 
 /// GET /api/cameras/:id/stream/rtmp/status - Check if RTMP stream is active.
 pub async fn camera_stream_rtmp_status(
+    _auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<axum::Json<serde_json::Value>, ApiError> {
