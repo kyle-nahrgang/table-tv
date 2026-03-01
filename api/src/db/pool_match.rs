@@ -152,6 +152,13 @@ impl Db {
             )));
         }
 
+        let current_games_won = match player {
+            1 => doc.player_one.games_won,
+            2 => doc.player_two.games_won,
+            _ => unreachable!(),
+        };
+        let is_correction = games_won < current_games_won;
+
         let (player_one_games_won, player_two_games_won) = match player {
             1 => (games_won, doc.player_two.games_won),
             2 => (doc.player_one.games_won, games_won),
@@ -190,9 +197,25 @@ impl Db {
             set_doc.insert("end_time", DateTime::now());
         }
 
-        let update_doc = doc! {
-            "$set": set_doc,
-            "$push": { "score_history": polodb_core::bson::to_bson(&history_entry).map_err(|e| ApiError::Unknown(e.to_string()))? }
+        let update_doc = if is_correction {
+            let mut update = if player_one_games_won == 0 && player_two_games_won == 0 {
+                set_doc.insert("score_history", polodb_core::bson::Bson::Array(vec![]));
+                doc! { "$set": set_doc }
+            } else {
+                doc! {
+                    "$set": set_doc,
+                    "$pop": { "score_history": 1 }
+                }
+            };
+            if doc.end_time.is_some() {
+                update.insert("$unset", doc! { "end_time": "" });
+            }
+            update
+        } else {
+            doc! {
+                "$set": set_doc,
+                "$push": { "score_history": polodb_core::bson::to_bson(&history_entry).map_err(|e| ApiError::Unknown(e.to_string()))? }
+            }
         };
         let result = collection.update_one(doc! { "_id": id }, update_doc)?;
         if result.matched_count == 0 {

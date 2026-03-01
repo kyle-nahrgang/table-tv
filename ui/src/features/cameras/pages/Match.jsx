@@ -684,27 +684,33 @@ export function Match() {
               Score history
             </Typography>
             <Stack component="ul" spacing={0} sx={{ listStyle: 'none', pl: 0, m: 0 }}>
-              {match.score_history.map((entry, i) => (
-                <Box
-                  key={i}
-                  component="li"
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    py: 1,
-                    borderBottom: i < match.score_history.length - 1 ? 1 : 0,
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140 }}>
-                    {formatTime(entry.timestamp)}
-                  </Typography>
-                  <Typography variant="body1" fontWeight={600}>
-                    {entry.player_one_games_won} – {entry.player_two_games_won}
-                  </Typography>
-                </Box>
-              ))}
+              {match.score_history.map((entry, i) => {
+                const prev = i > 0 ? match.score_history[i - 1] : { player_one_games_won: 0, player_two_games_won: 0 }
+                const p1Increased = entry.player_one_games_won > prev.player_one_games_won
+                const player = p1Increased ? match.player_one.name : match.player_two.name
+                const gameNumber = entry.player_one_games_won + entry.player_two_games_won
+                return (
+                  <Box
+                    key={i}
+                    component="li"
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      py: 1,
+                      borderBottom: i < match.score_history.length - 1 ? 1 : 0,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140 }}>
+                      {formatTime(entry.timestamp)}
+                    </Typography>
+                    <Typography variant="body1" fontWeight={600}>
+                      {player} won game {gameNumber}, {entry.player_one_games_won} – {entry.player_two_games_won}
+                    </Typography>
+                  </Box>
+                )
+              })}
             </Stack>
           </Box>
         )}
