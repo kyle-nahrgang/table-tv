@@ -18,14 +18,16 @@ pub struct AppState {
     pub overlay: OverlayState,
     pub facebook_tokens: facebook::FacebookTokenCache,
     pub rtmp_processes: crate::video::RtmpState,
+    pub preview_ffmpeg: crate::video::PreviewFfmpegHandle,
 }
 
 impl ApiServer {
     fn router(db: Db) -> Router {
         let overlay: OverlayState = Arc::new(RwLock::new(None));
         let rtmp_processes = crate::video::rtmp_state_new();
+        let preview_ffmpeg = Arc::new(RwLock::new(None));
         if db.list_cameras().map_or(false, |cams| cams.iter().any(|c| c.camera_type.is_internal())) {
-            video::ensure_internal_camera_ready(overlay.clone());
+            video::ensure_internal_camera_ready(overlay.clone(), preview_ffmpeg.clone());
             video::restore_overlay_from_db(&db, &overlay, &rtmp_processes);
             video::spawn_overlay_refresh_task(db.clone(), overlay.clone(), rtmp_processes.clone());
         }
@@ -34,6 +36,7 @@ impl ApiServer {
             overlay: overlay.clone(),
             facebook_tokens: facebook::FacebookTokenCache::new(),
             rtmp_processes,
+            preview_ffmpeg,
         };
 
         let mut app = Router::new()

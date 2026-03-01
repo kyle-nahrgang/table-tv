@@ -9,7 +9,7 @@ mod rtmp;
 
 pub use internal_camera::{
     camera_stream, camera_stream_rtmp_start, camera_stream_rtmp_stop, camera_stream_rtmp_status,
-    ensure_internal_camera_ready,
+    ensure_internal_camera_ready, PreviewFfmpegHandle,
 };
 pub use overlay::{
     clear_overlay, overlay_path_for_camera, restore_overlay_from_db, spawn_overlay_refresh_task,

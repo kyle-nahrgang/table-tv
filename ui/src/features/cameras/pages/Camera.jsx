@@ -372,6 +372,24 @@ export function Camera() {
               )}
             </Box>
             <Box sx={{ position: 'relative', display: 'inline-block' }}>
+              {rtmpActive ? (
+                <Box
+                  sx={{
+                    width: '100%',
+                    maxWidth: 640,
+                    height: 360,
+                    borderRadius: 8,
+                    backgroundColor: '#000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.7)',
+                  }}
+                >
+                  <Typography>Stream is live — preview unavailable</Typography>
+                </Box>
+              ) : (
+                <>
               <img
                 src={getStreamUrl(camera.id)}
                 alt={`${camera.name} live stream`}
@@ -501,6 +519,8 @@ export function Camera() {
                 </Box>
               </Box>
             )}
+                </>
+              )}
             </Box>
           </Box>
         )}
