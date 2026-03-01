@@ -25,11 +25,11 @@ import { fetchWithAuth } from '../../../apiClient.js'
  */
 
 /**
- * List all pool matches. Public endpoint (no auth required).
+ * List all pool matches. Uses fetchWithAuth when available (token sent if logged in).
  * @returns {Promise<PoolMatch[]>}
  */
 export async function listMatches() {
-  const res = await fetch('/api/pool-matches')
+  const res = await fetchWithAuth('/api/pool-matches')
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to list matches')

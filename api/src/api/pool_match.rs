@@ -88,13 +88,19 @@ pub struct PoolMatchResponse {
 
 impl PoolMatchResponse {
     fn from_doc(doc: PoolMatchDoc, camera_name: String) -> Option<Self> {
-        doc.id.map(|id| Self {
+        let id = doc.id?;
+        let camera_id = doc
+            .camera_id
+            .as_ref()
+            .map(|c| c.to_hex())
+            .unwrap_or_default();
+        Some(Self {
             id: id.to_hex(),
             player_one: doc.player_one.into(),
             player_two: doc.player_two.into(),
             start_time: doc.start_time.timestamp_millis(),
             end_time: doc.end_time.map(|dt| dt.timestamp_millis()),
-            camera_id: doc.camera_id.to_hex(),
+            camera_id,
             camera_name,
             started_by: doc.started_by_name,
             description: doc.description,
@@ -139,10 +145,10 @@ pub async fn pool_matches_active(
         .map_err(|_| ApiError::BadRequest("Invalid camera_id".to_string()))?;
     let m = app.db.find_active_pool_match_by_camera_id(&camera_oid)?;
     let resp = m.and_then(|doc| {
-        let camera_name = app.db
-            .find_camera_by_id(&doc.camera_id)
-            .ok()
-            .flatten()
+        let camera_name = doc
+            .camera_id
+            .as_ref()
+            .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
             .map(|c| c.name)
             .unwrap_or_default();
         PoolMatchResponse::from_doc(doc, camera_name)
@@ -158,10 +164,10 @@ pub async fn pool_matches_list(
     let responses: Vec<PoolMatchResponse> = matches
         .into_iter()
         .filter_map(|doc| {
-            let camera_name = app.db
-                .find_camera_by_id(&doc.camera_id)
-                .ok()
-                .flatten()
+            let camera_name = doc
+                .camera_id
+                .as_ref()
+                .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
                 .map(|c| c.name)
                 .unwrap_or_default();
             PoolMatchResponse::from_doc(doc, camera_name)
@@ -181,10 +187,10 @@ pub async fn pool_matches_get(
     let m = app.db
         .find_pool_match_by_id(&oid)?
         .ok_or(ApiError::PoolMatchNotFound)?;
-    let camera_name = app.db
-        .find_camera_by_id(&m.camera_id)
-        .ok()
-        .flatten()
+    let camera_name = m
+        .camera_id
+        .as_ref()
+        .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
         .map(|c| c.name)
         .unwrap_or_default();
     PoolMatchResponse::from_doc(m, camera_name).ok_or(ApiError::PoolMatchNotFound).map(Json)
@@ -255,24 +261,26 @@ pub async fn pool_matches_update_score(
     let oid =
         ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
     let updated = app.db.update_pool_match_games_won(&oid, req.player, req.games_won)?;
-    if updated.end_time.is_some() {
-        video::clear_overlay(&app.db, &app.overlay, &updated.camera_id, &app.rtmp_processes);
-    } else {
-        video::update_overlay(
-            &app.db,
-            &app.overlay,
-            &updated.camera_id,
-            &app.rtmp_processes,
-            Some(video::MatchOverlay {
-                player_one: video::OverlayPlayer::from_match_player(&updated.player_one),
-                player_two: video::OverlayPlayer::from_match_player(&updated.player_two),
-            }),
-        );
+    if let Some(ref cid) = updated.camera_id {
+        if updated.end_time.is_some() {
+            video::clear_overlay(&app.db, &app.overlay, cid, &app.rtmp_processes);
+        } else {
+            video::update_overlay(
+                &app.db,
+                &app.overlay,
+                cid,
+                &app.rtmp_processes,
+                Some(video::MatchOverlay {
+                    player_one: video::OverlayPlayer::from_match_player(&updated.player_one),
+                    player_two: video::OverlayPlayer::from_match_player(&updated.player_two),
+                }),
+            );
+        }
     }
-    let camera_name = app.db
-        .find_camera_by_id(&updated.camera_id)
-        .ok()
-        .flatten()
+    let camera_name = updated
+        .camera_id
+        .as_ref()
+        .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
         .map(|c| c.name)
         .unwrap_or_default();
     PoolMatchResponse::from_doc(updated, camera_name)
@@ -289,11 +297,13 @@ pub async fn pool_matches_end(
     let oid =
         ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
     let updated = app.db.end_pool_match(&oid)?;
-    video::clear_overlay(&app.db, &app.overlay, &updated.camera_id, &app.rtmp_processes);
-    let camera_name = app.db
-        .find_camera_by_id(&updated.camera_id)
-        .ok()
-        .flatten()
+    if let Some(ref cid) = updated.camera_id {
+        video::clear_overlay(&app.db, &app.overlay, cid, &app.rtmp_processes);
+    }
+    let camera_name = updated
+        .camera_id
+        .as_ref()
+        .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
         .map(|c| c.name)
         .unwrap_or_default();
     PoolMatchResponse::from_doc(updated, camera_name)
@@ -310,7 +320,7 @@ pub async fn pool_matches_delete(
     let oid =
         ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
     let match_doc = app.db.find_pool_match_by_id(&oid)?;
-    let camera_id = match_doc.as_ref().map(|m| m.camera_id);
+    let camera_id = match_doc.as_ref().and_then(|m| m.camera_id);
     let deleted = app.db.delete_pool_match(&oid)?;
     if !deleted {
         return Err(ApiError::PoolMatchNotFound);
@@ -323,8 +333,8 @@ pub async fn pool_matches_delete(
 
 pub fn routes() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/api/pool-matches", get(pool_matches_list).post(pool_matches_create))
         .route("/api/pool-matches/active", get(pool_matches_active))
+        .route("/api/pool-matches", get(pool_matches_list).post(pool_matches_create))
         .route(
             "/api/pool-matches/:id",
             get(pool_matches_get).delete(pool_matches_delete),

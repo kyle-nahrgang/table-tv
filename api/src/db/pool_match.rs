@@ -45,7 +45,9 @@ pub struct PoolMatchDoc {
     pub player_two: MatchPlayer,
     pub start_time: DateTime,
     pub end_time: Option<DateTime>,
-    pub camera_id: ObjectId,
+    /// Legacy documents may lack camera_id; they are skipped in list/active queries.
+    #[serde(default)]
+    pub camera_id: Option<ObjectId>,
     #[serde(default)]
     pub started_by_sub: Option<String>,
     #[serde(default)]
@@ -97,7 +99,7 @@ impl Db {
             player_two: match_data.player_two,
             start_time: match_data.start_time,
             end_time: match_data.end_time,
-            camera_id: match_data.camera_id,
+            camera_id: Some(match_data.camera_id),
             started_by_sub: match_data.started_by_sub,
             started_by_name: match_data.started_by_name,
             description: match_data.description,

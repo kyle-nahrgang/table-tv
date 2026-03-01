@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Box,
+  Button,
   Typography,
   List,
   ListItemButton,
@@ -63,6 +64,7 @@ function MatchDuration({ match }) {
 
 export function Home() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { isLoggedIn } = useAuth()
   const [cameras, setCameras] = useState([])
   const [matches, setMatches] = useState([])
@@ -90,23 +92,29 @@ export function Home() {
     return () => { cancelled = true }
   }, [isLoggedIn])
 
-  useEffect(() => {
-    let cancelled = false
-    async function fetch() {
-      try {
-        const data = await listMatches()
-        if (!cancelled) {
-          setMatches([...data].sort((a, b) => b.start_time - a.start_time))
-        }
-      } catch {
-        if (!cancelled) setMatches([])
-      } finally {
-        if (!cancelled) setMatchesLoading(false)
-      }
+  const fetchMatches = useCallback(async () => {
+    setMatchesLoading(true)
+    try {
+      const data = await listMatches()
+      setMatches([...data].sort((a, b) => b.start_time - a.start_time))
+    } catch {
+      setMatches([])
+    } finally {
+      setMatchesLoading(false)
     }
-    fetch()
-    return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (location.pathname !== '/') return
+    fetchMatches()
+  }, [location.pathname, fetchMatches])
+
+  useEffect(() => {
+    if (location.pathname !== '/') return
+    const onFocus = () => fetchMatches()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [location.pathname, fetchMatches])
 
   const cameraById = Object.fromEntries(cameras.map((c) => [c.id, c]))
 
@@ -119,9 +127,14 @@ export function Home() {
         Welcome to Table TV.
       </Typography>
 
-      <Typography variant="h6" component="h2" gutterBottom>
-        Matches
-      </Typography>
+      <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+        <Typography variant="h6" component="h2">
+          Matches
+        </Typography>
+        <Button size="small" onClick={fetchMatches} disabled={matchesLoading}>
+          {matchesLoading ? 'Loading…' : 'Refresh'}
+        </Button>
+      </Box>
       {matchesLoading ? (
         <Box display="flex" justifyContent="center" py={2}>
           <CircularProgress size={24} />
