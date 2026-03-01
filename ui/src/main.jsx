@@ -17,8 +17,8 @@ const domain = import.meta.env.AUTH0_DOMAIN || ''
 const clientId = import.meta.env.AUTH0_CLIENT_ID || ''
 const audience = import.meta.env.AUTH0_AUDIENCE || ''
 
-// Optional: override redirect (e.g. http://127.0.0.1:5173 if localhost causes 403)
-const redirectUri = import.meta.env.AUTH0_REDIRECT_URI || window.location.origin
+// Always use current host so redirect works from any URL (localhost, :80, production, etc.)
+const redirectUri = window.location.origin
 // If true, skip audience (uses ID token instead of access token). Use when audience causes 403.
 const skipAudience = import.meta.env.AUTH0_SKIP_AUDIENCE === 'true'
 const connection = import.meta.env.AUTH0_CONNECTION || undefined

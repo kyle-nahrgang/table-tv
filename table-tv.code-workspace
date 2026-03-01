@@ -1,5 +1,9 @@
 {
-  "folders": [{"path": "."}],
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
   "settings": {},
   "tasks": {
     "version": "2.0.0",
@@ -36,13 +40,58 @@
       },
       {
         "label": "API + UI",
-        "dependsOn": ["api", "ui"],
+        "dependsOn": [
+          "api",
+          "ui"
+        ],
         "dependsOrder": "parallel",
         "group": {
           "kind": "build",
           "isDefault": true
         }
-      }
+      },
+      {
+        "label": "mediamtx",
+        "type": "shell",
+        "command": "mediamtx mediamtx.yml",
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "group": "rtsp"
+        },
+        "isBackground": true,
+        "problemMatcher": []
+      },
+      {
+        "label": "rtsp (ffmpeg)",
+        "type": "shell",
+        "command": "ffmpeg -re -f lavfi -i \"testsrc=size=1280x720:rate=30\" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -f rtsp rtsp://localhost:8554/test",
+        "options": {
+          "cwd": "${workspaceFolder}"
+        },
+        "presentation": {
+          "reveal": "always",
+          "panel": "dedicated",
+          "group": "rtsp"
+        },
+        "isBackground": true,
+        "problemMatcher": []
+      },
+      {
+        "label": "Test RTSP",
+        "dependsOn": [
+          "mediamtx",
+          "rtsp (ffmpeg)"
+        ],
+        "dependsOrder": "parallel",
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        }
+      },
     ]
   }
 }

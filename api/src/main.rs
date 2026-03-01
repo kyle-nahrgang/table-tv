@@ -27,8 +27,17 @@ fn init_ssl_certs_macos() {
     .map(PathBuf::from)
     .collect();
     if let Ok(home) = std::env::var("HOME") {
-        candidates.insert(0, PathBuf::from(format!("{}/.homebrew/etc/gnutls/cert.pem", home)));
-        candidates.insert(1, PathBuf::from(format!("{}/.homebrew/opt/ca-certificates/share/ca-certificates/cacert.pem", home)));
+        candidates.insert(
+            0,
+            PathBuf::from(format!("{}/.homebrew/etc/gnutls/cert.pem", home)),
+        );
+        candidates.insert(
+            1,
+            PathBuf::from(format!(
+                "{}/.homebrew/opt/ca-certificates/share/ca-certificates/cacert.pem",
+                home
+            )),
+        );
     }
     for path in &candidates {
         if path.exists() {
@@ -52,7 +61,10 @@ async fn main() -> Result<(), crate::error::ApiError> {
         let _ = dotenvy::from_path(std::path::Path::new("../.env"));
     }
     tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tower_http=debug")))
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,tower_http=debug")),
+        )
         .with(tracing_subscriber::fmt::layer())
         .init();
     let db = db::Db::open_default()?;

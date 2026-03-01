@@ -7,8 +7,11 @@ services:
     ports:
       - "80:80"
     hostname: table-tv
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - table-tv-data:/app/data
+      - ./.env:/app/.env
 
 volumes:
   table-tv-data:

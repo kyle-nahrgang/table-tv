@@ -31,7 +31,6 @@ export default defineConfig(() => {
   if (env.AUTH0_DOMAIN) define['import.meta.env.AUTH0_DOMAIN'] = JSON.stringify(env.AUTH0_DOMAIN)
   if (env.AUTH0_CLIENT_ID) define['import.meta.env.AUTH0_CLIENT_ID'] = JSON.stringify(env.AUTH0_CLIENT_ID)
   if (env.AUTH0_AUDIENCE) define['import.meta.env.AUTH0_AUDIENCE'] = JSON.stringify(env.AUTH0_AUDIENCE)
-  if (env.AUTH0_REDIRECT_URI) define['import.meta.env.AUTH0_REDIRECT_URI'] = JSON.stringify(env.AUTH0_REDIRECT_URI)
   if (env.AUTH0_SKIP_AUDIENCE) define['import.meta.env.AUTH0_SKIP_AUDIENCE'] = JSON.stringify(env.AUTH0_SKIP_AUDIENCE)
   if (env.AUTH0_CONNECTION) define['import.meta.env.AUTH0_CONNECTION'] = JSON.stringify(env.AUTH0_CONNECTION)
 

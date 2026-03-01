@@ -13,6 +13,8 @@ RUN npm ci
 COPY ui/vite.config.js ./
 COPY ui/index.html ./
 COPY ui/src ./src
+# .env at project root - Vite reads it for AUTH0_* at build time
+COPY .env* ../
 RUN npm run build
 
 # =============================================================================
@@ -43,7 +45,7 @@ RUN cargo build --release
 # Build targets: ui-builder | api-deps | api-builder | table-tv (default)
 # =============================================================================
 FROM debian:bookworm-slim AS table-tv
-RUN apt-get update && apt-get install -y ca-certificates p11-kit avahi-daemon avahi-utils dumb-init ffmpeg \
+RUN apt-get update && apt-get install -y ca-certificates p11-kit avahi-daemon avahi-utils dumb-init ffmpeg nginx curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
@@ -61,10 +63,14 @@ RUN mkdir -p /app/data
 RUN echo "[server]\nhost-name=table-tv\nenable-dbus=no\n" > /etc/avahi/avahi-daemon.conf
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/nginx.conf /etc/nginx/sites-enabled/default
 RUN chmod +x /app/entrypoint.sh
 
-ENV PORT=80
+# API listens on 8080 (internal only). Nginx serves UI on 80 and proxies /api to 8080.
+ENV PORT=8080
+ENV SQLITE_PATH=/app/data/table-tv.db
 ENV RUST_LOG=info,tower_http=debug
 EXPOSE 80
+# 8080 is internal only - not published
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--", "/app/entrypoint.sh"]
