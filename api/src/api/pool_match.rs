@@ -45,7 +45,9 @@ impl TryFrom<RatingDto> for Rating {
                 Ok(Rating::Apa(d.value as u8))
             }
             "Fargo" => Ok(Rating::Fargo(d.value)),
-            _ => Err(ApiError::BadRequest("rating type must be Apa or Fargo".to_string())),
+            _ => Err(ApiError::BadRequest(
+                "rating type must be Apa or Fargo".to_string(),
+            )),
         }
     }
 }
@@ -202,9 +204,10 @@ pub async fn pool_matches_get(
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PoolMatchResponse>, ApiError> {
-    let oid =
-        ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
-    let m = app.db
+    let oid = ObjectId::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
+    let m = app
+        .db
         .find_pool_match_by_id(&oid)?
         .ok_or(ApiError::PoolMatchNotFound)?;
     let camera_name = m
@@ -213,7 +216,9 @@ pub async fn pool_matches_get(
         .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
         .map(|c| c.name)
         .unwrap_or_default();
-    PoolMatchResponse::from_doc(m, camera_name).ok_or(ApiError::PoolMatchNotFound).map(Json)
+    PoolMatchResponse::from_doc(m, camera_name)
+        .ok_or(ApiError::PoolMatchNotFound)
+        .map(Json)
 }
 
 /// POST /api/pool-matches - Create a new pool match.
@@ -223,36 +228,33 @@ pub async fn pool_matches_create(
     Json(req): Json<PoolMatchCreateRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     if req.player_one.name.is_empty() || req.player_two.name.is_empty() {
-        return Err(ApiError::BadRequest("player names are required".to_string()));
+        return Err(ApiError::BadRequest(
+            "player names are required".to_string(),
+        ));
     }
     let camera_oid = ObjectId::parse_str(&req.camera_id)
         .map_err(|_| ApiError::BadRequest("Invalid camera_id".to_string()))?;
-    let _camera = app.db
+    let _camera = app
+        .db
         .find_camera_by_id(&camera_oid)?
         .ok_or(ApiError::CameraNotFound)?;
     if req.player_one.race_to == 0 || req.player_two.race_to == 0 {
-        return Err(ApiError::BadRequest("race_to must be greater than 0".to_string()));
+        return Err(ApiError::BadRequest(
+            "race_to must be greater than 0".to_string(),
+        ));
     }
 
     let player_one = MatchPlayer {
         name: req.player_one.name,
         race_to: req.player_one.race_to,
         games_won: 0,
-        rating: req
-            .player_one
-            .rating
-            .map(|r| r.try_into())
-            .transpose()?,
+        rating: req.player_one.rating.map(|r| r.try_into()).transpose()?,
     };
     let player_two = MatchPlayer {
         name: req.player_two.name,
         race_to: req.player_two.race_to,
         games_won: 0,
-        rating: req
-            .player_two
-            .rating
-            .map(|r| r.try_into())
-            .transpose()?,
+        rating: req.player_two.rating.map(|r| r.try_into()).transpose()?,
     };
 
     let match_data = PoolMatch {
@@ -267,7 +269,13 @@ pub async fn pool_matches_create(
     };
 
     let id = app.db.create_pool_match(match_data)?;
-    video::update_overlay(&app.db, &app.overlay, &camera_oid, &app.rtmp_processes, None);
+    video::update_overlay(
+        &app.db,
+        &app.overlay,
+        &camera_oid,
+        &app.rtmp_processes,
+        None,
+    );
     Ok(Json(serde_json::json!({ "id": id.to_hex() })))
 }
 
@@ -279,13 +287,16 @@ pub async fn pool_matches_update_score(
     Path(id): Path<String>,
     Json(req): Json<PoolMatchUpdateScoreRequest>,
 ) -> Result<Json<PoolMatchResponse>, ApiError> {
-    let oid =
-        ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
-    let doc = app.db
+    let oid = ObjectId::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
+    let doc = app
+        .db
         .find_pool_match_by_id(&oid)?
         .ok_or(ApiError::PoolMatchNotFound)?;
     if doc.end_time.is_some() {
-        return Err(ApiError::BadRequest("Cannot update an ended match".to_string()));
+        return Err(ApiError::BadRequest(
+            "Cannot update an ended match".to_string(),
+        ));
     }
     let can_update = doc
         .started_by_sub
@@ -297,7 +308,9 @@ pub async fn pool_matches_update_score(
             "Only the person who created the match can update it".to_string(),
         ));
     }
-    let updated = app.db.update_pool_match_games_won(&oid, req.player, req.games_won)?;
+    let updated = app
+        .db
+        .update_pool_match_games_won(&oid, req.player, req.games_won)?;
     if let Some(ref cid) = updated.camera_id {
         if updated.end_time.is_some() {
             video::clear_overlay(&app.db, &app.overlay, cid, &app.rtmp_processes);
@@ -332,9 +345,10 @@ pub async fn pool_matches_end(
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PoolMatchResponse>, ApiError> {
-    let oid =
-        ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
-    let doc = app.db
+    let oid = ObjectId::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
+    let doc = app
+        .db
         .find_pool_match_by_id(&oid)?
         .ok_or(ApiError::PoolMatchNotFound)?;
     let can_end = auth.is_admin
@@ -369,8 +383,8 @@ pub async fn pool_matches_delete(
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let oid =
-        ObjectId::parse_str(&id).map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
+    let oid = ObjectId::parse_str(&id)
+        .map_err(|_| ApiError::BadRequest("Invalid pool match id".to_string()))?;
     let match_doc = app.db.find_pool_match_by_id(&oid)?;
     let camera_id = match_doc.as_ref().and_then(|m| m.camera_id);
     let deleted = app.db.delete_pool_match(&oid)?;
@@ -386,11 +400,17 @@ pub async fn pool_matches_delete(
 pub fn routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/api/pool-matches/active", get(pool_matches_active))
-        .route("/api/pool-matches", get(pool_matches_list).post(pool_matches_create))
+        .route(
+            "/api/pool-matches",
+            get(pool_matches_list).post(pool_matches_create),
+        )
         .route(
             "/api/pool-matches/:id",
             get(pool_matches_get).delete(pool_matches_delete),
         )
-        .route("/api/pool-matches/:id/score", patch(pool_matches_update_score))
+        .route(
+            "/api/pool-matches/:id/score",
+            patch(pool_matches_update_score),
+        )
         .route("/api/pool-matches/:id/end", patch(pool_matches_end))
 }

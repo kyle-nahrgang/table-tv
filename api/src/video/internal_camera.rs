@@ -18,7 +18,7 @@ use crate::api::auth::{AuthenticatedUser, StreamAuth};
 use crate::api::AppState;
 use crate::db::camera::CameraType;
 use crate::error::ApiError;
-use crate::video::{overlay, rtsp_camera, rtmp, CameraSource};
+use crate::video::{overlay, rtmp, rtsp_camera, CameraSource};
 
 const MJPEG_BOUNDARY: &str = "frame";
 
@@ -60,7 +60,9 @@ fn extract_jpeg_frames(mut reader: ChildStdout, tx: broadcast::Sender<Bytes>) {
                         }
                     } else {
                         frame.extend_from_slice(&chunk[i..]);
-                        if let Some(pos) = frame.windows(2).rposition(|w| w[0] == 0xFF && w[1] == 0xD9) {
+                        if let Some(pos) =
+                            frame.windows(2).rposition(|w| w[0] == 0xFF && w[1] == 0xD9)
+                        {
                             let end = pos + 2;
                             let jpeg = frame.drain(..end).collect::<Vec<_>>();
                             let _ = tx.send(Bytes::from(jpeg));
@@ -89,12 +91,18 @@ fn spawn_preview_ffmpeg(camera_index: u32) -> Option<Child> {
         Command::new("ffmpeg")
             .args([
                 "-y",
-                "-f", "avfoundation",
-                "-framerate", "30",
-                "-video_device_index", &cam_idx.to_string(),
-                "-i", "0:none",
-                "-f", "mjpeg",
-                "-q:v", "5",
+                "-f",
+                "avfoundation",
+                "-framerate",
+                "30",
+                "-video_device_index",
+                &cam_idx.to_string(),
+                "-i",
+                "0:none",
+                "-f",
+                "mjpeg",
+                "-q:v",
+                "5",
                 "-",
             ])
             .stdout(Stdio::piped())
@@ -105,12 +113,18 @@ fn spawn_preview_ffmpeg(camera_index: u32) -> Option<Child> {
         Command::new("ffmpeg")
             .args([
                 "-y",
-                "-f", "v4l2",
-                "-input_format", "mjpeg",
-                "-framerate", "30",
-                "-i", &device,
-                "-f", "mjpeg",
-                "-q:v", "5",
+                "-f",
+                "v4l2",
+                "-input_format",
+                "mjpeg",
+                "-framerate",
+                "30",
+                "-i",
+                &device,
+                "-f",
+                "mjpeg",
+                "-q:v",
+                "5",
                 "-",
             ])
             .stdout(Stdio::piped())
@@ -129,7 +143,10 @@ fn spawn_preview_ffmpeg(camera_index: u32) -> Option<Child> {
             Some(c)
         }
         Err(e) => {
-            tracing::warn!("FFmpeg camera capture not available (expected in Docker): {}", e);
+            tracing::warn!(
+                "FFmpeg camera capture not available (expected in Docker): {}",
+                e
+            );
             None
         }
     }
@@ -149,7 +166,10 @@ fn stop_preview_ffmpeg(handle: &PreviewFfmpegHandle) {
 /// Handle to the preview FFmpeg process. Stored in app state for coordination with RTMP.
 pub type PreviewFfmpegHandle = Arc<RwLock<Option<Child>>>;
 
-fn get_or_init_camera(_overlay: overlay::OverlayState, preview_handle: PreviewFfmpegHandle) -> Option<Arc<InternalCameraState>> {
+fn get_or_init_camera(
+    _overlay: overlay::OverlayState,
+    preview_handle: PreviewFfmpegHandle,
+) -> Option<Arc<InternalCameraState>> {
     {
         let guard = INTERNAL_CAMERA.read().unwrap();
         if let Some(ref state) = *guard {
@@ -167,7 +187,10 @@ fn get_or_init_camera(_overlay: overlay::OverlayState, preview_handle: PreviewFf
 }
 
 /// Pre-initialize the internal camera at startup.
-pub fn ensure_internal_camera_ready(overlay: overlay::OverlayState, preview_handle: PreviewFfmpegHandle) {
+pub fn ensure_internal_camera_ready(
+    overlay: overlay::OverlayState,
+    preview_handle: PreviewFfmpegHandle,
+) {
     let _ = get_or_init_camera(overlay, preview_handle);
 }
 
@@ -302,13 +325,7 @@ pub async fn camera_stream_rtmp_start(
         std::thread::sleep(std::time::Duration::from_secs(2));
     }
 
-    overlay::update_overlay(
-        &app.db,
-        &app.overlay,
-        &oid,
-        &app.rtmp_processes,
-        None,
-    );
+    overlay::update_overlay(&app.db, &app.overlay, &oid, &app.rtmp_processes, None);
 
     let cam_idx = std::env::var("CAMERA_INDEX")
         .ok()
@@ -345,7 +362,9 @@ pub async fn camera_stream_rtmp_start(
         is_rtsp, // Use MJPEG from stream URL for RTSP (no direct capture)
     ) {
         Ok(()) => {
-            rtmp.write().unwrap().insert(id.clone(), (stop_tx, rtmp_url));
+            rtmp.write()
+                .unwrap()
+                .insert(id.clone(), (stop_tx, rtmp_url));
             tracing::info!("RTMP start: ffmpeg pipeline started successfully");
             Ok(axum::Json(
                 serde_json::json!({ "ok": true, "message": "RTMP stream started" }),

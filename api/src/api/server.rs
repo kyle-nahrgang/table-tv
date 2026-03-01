@@ -29,15 +29,21 @@ impl ApiServer {
         let overlay: OverlayState = Arc::new(RwLock::new(None));
         let rtmp_processes = crate::video::rtmp_state_new();
         let preview_ffmpeg = Arc::new(RwLock::new(None));
-        if db.list_cameras().map_or(false, |cams| cams.iter().any(|c| c.camera_type.is_internal())) {
+        if db.list_cameras().map_or(false, |cams| {
+            cams.iter().any(|c| c.camera_type.is_internal())
+        }) {
             video::ensure_internal_camera_ready(overlay.clone(), preview_ffmpeg.clone());
             video::restore_overlay_from_db(&db, &overlay, &rtmp_processes);
             video::spawn_overlay_refresh_task(db.clone(), overlay.clone(), rtmp_processes.clone());
         }
         let auth0_ready = std::env::var("AUTH0_DOMAIN").is_ok()
-            && (std::env::var("AUTH0_AUDIENCE").is_ok() || std::env::var("AUTH0_CLIENT_ID").is_ok());
-        let jwks = auth0_ready
-            .then(|| Arc::new(auth::JwksCache::new(&std::env::var("AUTH0_DOMAIN").unwrap_or_default())));
+            && (std::env::var("AUTH0_AUDIENCE").is_ok()
+                || std::env::var("AUTH0_CLIENT_ID").is_ok());
+        let jwks = auth0_ready.then(|| {
+            Arc::new(auth::JwksCache::new(
+                &std::env::var("AUTH0_DOMAIN").unwrap_or_default(),
+            ))
+        });
 
         let stream_token = std::env::var("STREAM_TOKEN").unwrap_or_else(|_| {
             use std::collections::hash_map::DefaultHasher;
