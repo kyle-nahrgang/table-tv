@@ -19,13 +19,15 @@ import { fetchWithAuth } from '../../../apiClient.js'
  * @property {number} start_time
  * @property {number | null} [end_time]
  * @property {string} camera_name
+ * @property {string} [started_by] - Display name of user who started the match
  */
 
 /**
+ * List all pool matches. Public endpoint (no auth required).
  * @returns {Promise<PoolMatch[]>}
  */
 export async function listMatches() {
-  const res = await fetchWithAuth('/api/pool-matches')
+  const res = await fetch('/api/pool-matches')
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to list matches')

@@ -116,6 +116,7 @@ export function MatchesSettings() {
                 <TableCell>Score</TableCell>
                 <TableCell>Camera</TableCell>
                 <TableCell>Started</TableCell>
+                <TableCell>Started by</TableCell>
                 <TableCell>Duration</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="right">Actions</TableCell>
@@ -124,7 +125,7 @@ export function MatchesSettings() {
             <TableBody>
               {matches.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">
                       No matches yet. Start a match from a camera view.
                     </Typography>
@@ -142,6 +143,7 @@ export function MatchesSettings() {
                       <TableCell>{score}</TableCell>
                       <TableCell>{match.camera_name}</TableCell>
                       <TableCell>{formatTime(match.start_time)}</TableCell>
+                      <TableCell>{match.started_by ?? '—'}</TableCell>
                       <TableCell>{formatDuration(durationMs)}</TableCell>
                       <TableCell>
                         {match.end_time ? (

@@ -77,6 +77,9 @@ pub struct PoolMatchResponse {
     pub start_time: i64,
     pub end_time: Option<i64>,
     pub camera_name: String,
+    /// Display name of the user who started the match.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_by: Option<String>,
 }
 
 impl PoolMatchResponse {
@@ -88,6 +91,7 @@ impl PoolMatchResponse {
             start_time: doc.start_time.timestamp_millis(),
             end_time: doc.end_time.map(|dt| dt.timestamp_millis()),
             camera_name: doc.camera_name,
+            started_by: doc.started_by_name,
         })
     }
 }
@@ -127,9 +131,8 @@ pub async fn pool_matches_active(
     Ok(Json(m.and_then(PoolMatchResponse::from_doc)))
 }
 
-/// GET /api/pool-matches - List all pool matches.
+/// GET /api/pool-matches - List all pool matches. Public (no auth required).
 pub async fn pool_matches_list(
-    _auth: AuthenticatedUser,
     State(app): State<AppState>,
 ) -> Result<Json<Vec<PoolMatchResponse>>, ApiError> {
     let matches = app.db.list_pool_matches()?;
@@ -156,7 +159,7 @@ pub async fn pool_matches_get(
 
 /// POST /api/pool-matches - Create a new pool match.
 pub async fn pool_matches_create(
-    _auth: AuthenticatedUser,
+    auth: AuthenticatedUser,
     State(app): State<AppState>,
     Json(req): Json<PoolMatchCreateRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -198,6 +201,8 @@ pub async fn pool_matches_create(
         start_time: DateTime::now(),
         end_time: None,
         camera_name: req.camera_name,
+        started_by_sub: Some(auth.sub),
+        started_by_name: Some(auth.name),
     };
 
     let id = app.db.create_pool_match(match_data)?;

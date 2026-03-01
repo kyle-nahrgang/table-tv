@@ -4,11 +4,34 @@ import { Box, Button, CircularProgress, Typography } from '@mui/material'
 
 import { useApiInfo } from './apiInfoStore.jsx'
 import { useAuth0 } from '@auth0/auth0-react'
+import { useAuth } from './authStore.jsx'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { Camera } from './features/cameras'
 import { Admin } from './features/admin'
 import { FacebookCallback } from './pages/FacebookCallback'
+
+/** Wraps a route that requires authentication. Redirects to login if not logged in. */
+function RequireAuth({ children }) {
+  const location = useLocation()
+  const { loginWithRedirect } = useAuth0()
+  const { isLoggedIn, loading } = useAuth()
+
+  useEffect(() => {
+    if (!loading && !isLoggedIn) {
+      loginWithRedirect({ appState: { returnTo: location.pathname } })
+    }
+  }, [loading, isLoggedIn, loginWithRedirect, location.pathname])
+
+  if (loading || !isLoggedIn) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+  return children
+}
 
 const LOADING_TIMEOUT_MS = 15000
 
@@ -108,7 +131,7 @@ function App() {
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<Home />} />
-        <Route path="camera/:id" element={<Camera />} />
+        <Route path="camera/:id" element={<RequireAuth><Camera /></RequireAuth>} />
         <Route path="admin" element={<Admin />} />
         <Route path="admin/server-settings" element={<Admin />} />
         <Route path="admin/camera-settings" element={<Admin />} />

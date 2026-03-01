@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import VideocamIcon from '@mui/icons-material/Videocam'
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
+import { useAuth } from '../authStore.jsx'
 import { listCameras, parseCameraType } from '../features/cameras/api/cameras.js'
 import { listMatches } from '../features/cameras/api/poolMatches.js'
 
@@ -62,12 +63,18 @@ function MatchDuration({ match }) {
 
 export function Home() {
   const navigate = useNavigate()
+  const { isLoggedIn } = useAuth()
   const [cameras, setCameras] = useState([])
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [matchesLoading, setMatchesLoading] = useState(true)
 
   useEffect(() => {
+    if (!isLoggedIn) {
+      setCameras([])
+      setLoading(false)
+      return
+    }
     let cancelled = false
     async function fetch() {
       try {
@@ -81,7 +88,7 @@ export function Home() {
     }
     fetch()
     return () => { cancelled = true }
-  }, [])
+  }, [isLoggedIn])
 
   useEffect(() => {
     let cancelled = false
@@ -133,6 +140,9 @@ export function Home() {
               const secondary = (
                 <>
                   {formatTime(match.start_time)} · <MatchDuration match={match} />
+                  {match.started_by && (
+                    <> · Started by {match.started_by}</>
+                  )}
                   {match.end_time && (
                     <>
                       {' '}
@@ -171,34 +181,38 @@ export function Home() {
         </Paper>
       )}
 
-      <Typography variant="h6" component="h2" gutterBottom>
-        Cameras
-      </Typography>
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={4}>
-          <CircularProgress />
-        </Box>
-      ) : cameras.length === 0 ? (
-        <Typography color="text.secondary">
-          No cameras configured. Add cameras in Admin → Camera Settings.
-        </Typography>
-      ) : (
-        <Paper variant="outlined">
-          <List disablePadding>
-            {cameras.map((camera) => (
-              <ListItemButton
-                key={camera.id}
-                onClick={() => navigate(`/camera/${camera.id}`)}
-              >
-                <VideocamIcon sx={{ mr: 2, color: 'text.secondary' }} />
-                <ListItemText
-                  primary={camera.name}
-                  secondary={formatCameraType(camera.camera_type)}
-                />
-              </ListItemButton>
-            ))}
-          </List>
-        </Paper>
+      {isLoggedIn && (
+        <>
+          <Typography variant="h6" component="h2" gutterBottom>
+            Cameras
+          </Typography>
+          {loading ? (
+            <Box display="flex" justifyContent="center" py={4}>
+              <CircularProgress />
+            </Box>
+          ) : cameras.length === 0 ? (
+            <Typography color="text.secondary">
+              No cameras configured. Add cameras in Admin → Camera Settings.
+            </Typography>
+          ) : (
+            <Paper variant="outlined">
+              <List disablePadding>
+                {cameras.map((camera) => (
+                  <ListItemButton
+                    key={camera.id}
+                    onClick={() => navigate(`/camera/${camera.id}`)}
+                  >
+                    <VideocamIcon sx={{ mr: 2, color: 'text.secondary' }} />
+                    <ListItemText
+                      primary={camera.name}
+                      secondary={formatCameraType(camera.camera_type)}
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Paper>
+          )}
+        </>
       )}
     </Box>
   )

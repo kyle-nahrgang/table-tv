@@ -28,6 +28,10 @@ pub struct PoolMatch {
     pub start_time: DateTime,
     pub end_time: Option<DateTime>,
     pub camera_name: String,
+    #[serde(default)]
+    pub started_by_sub: Option<String>,
+    #[serde(default)]
+    pub started_by_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +43,10 @@ pub struct PoolMatchDoc {
     pub start_time: DateTime,
     pub end_time: Option<DateTime>,
     pub camera_name: String,
+    #[serde(default)]
+    pub started_by_sub: Option<String>,
+    #[serde(default)]
+    pub started_by_name: Option<String>,
 }
 
 impl Db {
@@ -85,6 +93,8 @@ impl Db {
             start_time: match_data.start_time,
             end_time: match_data.end_time,
             camera_name: match_data.camera_name,
+            started_by_sub: match_data.started_by_sub,
+            started_by_name: match_data.started_by_name,
         };
         let result = collection.insert_one(doc)?;
         result

@@ -573,9 +573,16 @@ export function Camera() {
         )}
 
         <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Pool Match
-          </Typography>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6">
+              Pool Match
+            </Typography>
+            {activeMatch?.started_by && (
+              <Typography variant="body2" color="text.secondary">
+                Started by {activeMatch.started_by}
+              </Typography>
+            )}
+          </Box>
           {matchLoading ? (
             <CircularProgress size={24} />
           ) : activeMatch ? (
