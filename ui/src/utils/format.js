@@ -118,7 +118,7 @@ export function formatMatchWinner(match) {
  * @param {string} recordDeleteAfter
  * @returns {number}
  */
-function parseRetentionMs(recordDeleteAfter) {
+export function parseRetentionMs(recordDeleteAfter) {
   const s = (recordDeleteAfter || '').trim()
   if (!s || s === '0') return Infinity
   const m = s.match(/^(\d+)([hd])$/i)

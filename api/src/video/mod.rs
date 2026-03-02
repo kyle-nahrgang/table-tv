@@ -11,7 +11,7 @@ mod rtsp_camera;
 mod rtmp;
 mod stream;
 
-pub use recording::recording_download;
+pub use recording::{recording_download, recording_timeline};
 pub use stream::{
     camera_stream, camera_stream_rtmp_start, camera_stream_rtmp_stop, camera_stream_rtmp_status,
 };

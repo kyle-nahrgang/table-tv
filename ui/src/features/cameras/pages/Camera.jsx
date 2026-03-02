@@ -35,6 +35,7 @@ import { getToken, urlWithToken } from '../../../apiClient.js'
 import { LiveTimestamp } from '../../../components/LiveTimestamp.jsx'
 import { StreamPreview } from '../components/StreamPreview.jsx'
 import { MatchScoreControls } from '../components/MatchScoreControls.jsx'
+import { RecordingTimelineBar } from '../components/RecordingTimelineBar.jsx'
 
 export function Camera() {
   const { id } = useParams()
@@ -478,144 +479,152 @@ export function Camera() {
             {detail}
           </Typography>
         )}
-        {hasStream && (
-          <Box sx={{ mt: 2, position: 'relative', display: 'inline-block' }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-              <Button
-                startIcon={<LiveTvIcon />}
-                variant="outlined"
-                onClick={() => { fetchRtmpStatus(); setRtmpDialogOpen(true) }}
-                disabled={rtmpActive}
-              >
-                Go Live
-              </Button>
-              {rtmpActive && (
-                <Button
-                  startIcon={<StopIcon />}
-                  variant="outlined"
-                  color="error"
-                  onClick={handleStopRtmp}
-                  disabled={rtmpStopping}
-                >
-                  {rtmpStopping ? 'Stopping…' : 'Stop stream'}
-                </Button>
-              )}
-            </Box>
-            <StreamPreview
-              streamUrl={streamUrl}
-              streamError={streamError}
-              previewLoaded={previewLoaded}
-              setPreviewLoaded={setPreviewLoaded}
-              onRetry={() => {
-                setStreamError(false)
-                setPreviewLoaded(false)
-                getToken().then((t) => setStreamUrl(urlWithToken(`/api/cameras/${camera.id}/stream`, t)))
-              }}
-              onStreamError={() => setStreamError(true)}
-              rtmpActive={rtmpActive}
-              cameraName={camera.name}
-              locationName={locationName}
-              overlayMatch={activeMatch}
-            />
-            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
-                Download last:
-              </Typography>
-              {[30, 60, 90].map((sec) => {
-                const isDownloading = downloadingRecent === sec
-                return (
-                  <Button
-                    key={sec}
-                    size="small"
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    disabled={isDownloading || camera.connection_status === false}
-                    onClick={async () => {
-                      setDownloadingRecent(sec)
-                      try {
-                        const startMs = Date.now() - sec * 1000
-                        await downloadGameRecording(
-                          camera.id,
-                          startMs,
-                          sec,
-                          `clip-${sec}s.mp4`
-                        )
-                      } catch (err) {
-                        console.error('Download failed', err)
-                      } finally {
-                        setDownloadingRecent(null)
-                      }
-                    }}
-                  >
-                    {isDownloading ? 'Downloading…' : `${sec}s`}
-                  </Button>
-                )
-              })}
-            </Box>
-          </Box>
+        {hasStream && camera.connection_status === false && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Camera is offline. Streaming, practice, and matches are disabled until the camera reconnects.
+          </Alert>
         )}
 
-        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          {camera.connection_status === false && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              Camera is offline. Start practice, match, and downloads are disabled until the camera reconnects.
-            </Alert>
-          )}
-          {startError && !startDialogOpen && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setStartError('')}>
-              {startError}
-            </Alert>
-          )}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="h6">
-              Pool Match
-            </Typography>
-            {activeMatch?.started_by && (
-              <Typography variant="body2" color="text.secondary">
-                Started by {activeMatch.started_by}
-              </Typography>
-            )}
-          </Box>
-          {matchLoading ? (
-            <CircularProgress size={24} />
-          ) : activeMatch ? (
-            <Stack spacing={2}>
-              {activeMatch.description?.trim() && (
-                <Box sx={{ py: 1, px: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {activeMatch.description.trim()}
-                  </Typography>
-                </Box>
-              )}
-              <MatchScoreControls
-                match={activeMatch}
-                scoreUpdating={scoreUpdating}
-                onScoreChange={handleScoreChange}
-                onEndMatch={handleEndMatch}
+        {hasStream && camera.connection_status !== false && (
+          <>
+            <Box sx={{ mt: 2, position: 'relative', width: '100%' }}>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                <Button
+                  startIcon={<LiveTvIcon />}
+                  variant="outlined"
+                  onClick={() => { fetchRtmpStatus(); setRtmpDialogOpen(true) }}
+                  disabled={rtmpActive}
+                >
+                  Go Live
+                </Button>
+                {rtmpActive && (
+                  <Button
+                    startIcon={<StopIcon />}
+                    variant="outlined"
+                    color="error"
+                    onClick={handleStopRtmp}
+                    disabled={rtmpStopping}
+                  >
+                    {rtmpStopping ? 'Stopping…' : 'Stop stream'}
+                  </Button>
+                )}
+              </Box>
+              <StreamPreview
+                streamUrl={streamUrl}
+                streamError={streamError}
+                previewLoaded={previewLoaded}
+                setPreviewLoaded={setPreviewLoaded}
+                onRetry={() => {
+                  setStreamError(false)
+                  setPreviewLoaded(false)
+                  getToken().then((t) => setStreamUrl(urlWithToken(`/api/cameras/${camera.id}/stream`, t)))
+                }}
+                onStreamError={() => setStreamError(true)}
+                rtmpActive={rtmpActive}
+                cameraName={camera.name}
+                locationName={locationName}
+                overlayMatch={activeMatch}
               />
-            </Stack>
-          ) : (
-            <Stack direction="row" spacing={2}>
-              <Button
-                startIcon={<PlayArrowIcon />}
-                variant="outlined"
-                onClick={handleStartPractice}
-                disabled={!user || startPracticeLoading || camera.connection_status === false}
-              >
-                {startPracticeLoading ? 'Starting…' : 'Start practice'}
-              </Button>
-              <Button
-                startIcon={<PlayArrowIcon />}
-                variant="contained"
-                onClick={() => setStartDialogOpen(true)}
-                disabled={camera.connection_status === false}
-              >
-                Start match
-              </Button>
-            </Stack>
-          )}
-        </Box>
+              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+                  Download last:
+                </Typography>
+                {[30, 60, 90].map((sec) => {
+                  const isDownloading = downloadingRecent === sec
+                  return (
+                    <Button
+                      key={sec}
+                      size="small"
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      disabled={isDownloading}
+                      onClick={async () => {
+                        setDownloadingRecent(sec)
+                        try {
+                          const startMs = Date.now() - sec * 1000
+                          await downloadGameRecording(
+                            camera.id,
+                            startMs,
+                            sec,
+                            `clip-${sec}s.mp4`
+                          )
+                        } catch (err) {
+                          console.error('Download failed', err)
+                        } finally {
+                          setDownloadingRecent(null)
+                        }
+                      }}
+                    >
+                      {isDownloading ? 'Downloading…' : `${sec}s`}
+                    </Button>
+                  )
+                })}
+              </Box>
+            </Box>
 
+            <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              {startError && !startDialogOpen && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setStartError('')}>
+                  {startError}
+                </Alert>
+              )}
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="h6">
+                  Pool Match
+                </Typography>
+                {activeMatch?.started_by && (
+                  <Typography variant="body2" color="text.secondary">
+                    Started by {activeMatch.started_by}
+                  </Typography>
+                )}
+              </Box>
+              {matchLoading ? (
+                <CircularProgress size={24} />
+              ) : activeMatch ? (
+                <Stack spacing={2}>
+                  {activeMatch.description?.trim() && (
+                    <Box sx={{ py: 1, px: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {activeMatch.description.trim()}
+                      </Typography>
+                    </Box>
+                  )}
+                  <MatchScoreControls
+                    match={activeMatch}
+                    scoreUpdating={scoreUpdating}
+                    onScoreChange={handleScoreChange}
+                    onEndMatch={handleEndMatch}
+                  />
+                </Stack>
+              ) : (
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    startIcon={<PlayArrowIcon />}
+                    variant="outlined"
+                    onClick={handleStartPractice}
+                    disabled={!user || startPracticeLoading}
+                  >
+                    {startPracticeLoading ? 'Starting…' : 'Start practice'}
+                  </Button>
+                  <Button
+                    startIcon={<PlayArrowIcon />}
+                    variant="contained"
+                    onClick={() => setStartDialogOpen(true)}
+                  >
+                    Start match
+                  </Button>
+                </Stack>
+              )}
+            </Box>
+
+          </>
+        )}
+        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+          <RecordingTimelineBar
+            cameraId={camera.id}
+            recordDeleteAfter={recordDeleteAfter}
+          />
+        </Box>
         {cameraMatches.length > 0 && (
           <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
             <Typography variant="h6" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -857,41 +866,41 @@ export function Camera() {
             </Stack>
             <Stack spacing={2} sx={{ flex: 1 }}>
               <Typography variant="subtitle2" color="text.secondary">Player 2</Typography>
-                <TextField
-                  label="Name"
-                  value={startForm.playerTwoName}
-                  onChange={(e) => setStartForm((f) => ({ ...f, playerTwoName: e.target.value }))}
-                  fullWidth
-                />
-                <FormControl fullWidth>
-                  <InputLabel>Rating type</InputLabel>
-                  <Select
-                    value={startForm.playerTwoRatingType}
-                    label="Rating type"
-                    onChange={(e) => setStartForm((f) => ({ ...f, playerTwoRatingType: e.target.value }))}
-                  >
-                    <MenuItem value="Fargo">Fargo</MenuItem>
-                    <MenuItem value="Apa">APA</MenuItem>
-                  </Select>
-                </FormControl>
-                <TextField
-                  label="Rating (optional)"
-                  placeholder={startForm.playerTwoRatingType === 'Fargo' ? 'e.g. 650' : 'e.g. 5'}
-                  type="number"
-                  value={startForm.playerTwoRating}
-                  onChange={(e) => setStartForm((f) => ({ ...f, playerTwoRating: e.target.value }))}
-                  inputProps={{ min: 0, max: startForm.playerTwoRatingType === 'Apa' ? 9 : undefined }}
-                  fullWidth
-                />
-                <TextField
-                  label="Race to"
-                  type="number"
-                  value={startForm.playerTwoRaceTo}
-                  onChange={(e) => setStartForm((f) => ({ ...f, playerTwoRaceTo: parseInt(e.target.value, 10) || 5 }))}
-                  inputProps={{ min: 1, max: 21 }}
-                  fullWidth
-                />
-              </Stack>
+              <TextField
+                label="Name"
+                value={startForm.playerTwoName}
+                onChange={(e) => setStartForm((f) => ({ ...f, playerTwoName: e.target.value }))}
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel>Rating type</InputLabel>
+                <Select
+                  value={startForm.playerTwoRatingType}
+                  label="Rating type"
+                  onChange={(e) => setStartForm((f) => ({ ...f, playerTwoRatingType: e.target.value }))}
+                >
+                  <MenuItem value="Fargo">Fargo</MenuItem>
+                  <MenuItem value="Apa">APA</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                label="Rating (optional)"
+                placeholder={startForm.playerTwoRatingType === 'Fargo' ? 'e.g. 650' : 'e.g. 5'}
+                type="number"
+                value={startForm.playerTwoRating}
+                onChange={(e) => setStartForm((f) => ({ ...f, playerTwoRating: e.target.value }))}
+                inputProps={{ min: 0, max: startForm.playerTwoRatingType === 'Apa' ? 9 : undefined }}
+                fullWidth
+              />
+              <TextField
+                label="Race to"
+                type="number"
+                value={startForm.playerTwoRaceTo}
+                onChange={(e) => setStartForm((f) => ({ ...f, playerTwoRaceTo: parseInt(e.target.value, 10) || 5 }))}
+                inputProps={{ min: 1, max: 21 }}
+                fullWidth
+              />
+            </Stack>
           </Stack>
           <TextField
             label="Match description (optional)"

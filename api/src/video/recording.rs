@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 
 use crate::api::auth::AuthenticatedUser;
 use crate::api::AppState;
@@ -28,8 +29,21 @@ pub struct RecordingDownloadQuery {
 #[derive(serde::Deserialize)]
 struct MediaMTXListEntry {
     start: String,
-    #[allow(dead_code)]
     duration: f64,
+}
+
+#[derive(serde::Deserialize)]
+pub struct RecordingTimelineQuery {
+    /// Start time in milliseconds since epoch
+    pub start: i64,
+    /// End time in milliseconds since epoch
+    pub end: i64,
+}
+
+#[derive(Serialize)]
+pub struct TimelineSegment {
+    pub start_ms: i64,
+    pub duration_sec: f64,
 }
 
 /// Align start time with MediaMTX segment boundaries. When the requested start is before
@@ -178,4 +192,87 @@ pub async fn recording_download(
         .into_response();
 
     Ok(response)
+}
+
+/// GET /api/cameras/:id/recordings/timeline?start=...&end=...
+/// Returns available recording segments from MediaMTX for the given time range.
+pub async fn recording_timeline(
+    _auth: AuthenticatedUser,
+    State(app): State<AppState>,
+    Path(id): Path<String>,
+    Query(q): Query<RecordingTimelineQuery>,
+) -> Result<axum::Json<Vec<TimelineSegment>>, ApiError> {
+    if id.is_empty() || id.len() > 64 {
+        return Err(ApiError::BadRequest("Invalid camera id".to_string()));
+    }
+
+    let _camera = app
+        .db
+        .find_camera_by_id(&id)?
+        .ok_or(ApiError::CameraNotFound)?;
+
+    if q.end <= q.start {
+        return Err(ApiError::BadRequest(
+            "end must be greater than start".to_string(),
+        ));
+    }
+    let range_ms = q.end - q.start;
+    if range_ms > 7 * 24 * 60 * 60 * 1000 {
+        return Err(ApiError::BadRequest(
+            "Time range must not exceed 7 days".to_string(),
+        ));
+    }
+
+    let start_dt: DateTime<Utc> = DateTime::from_timestamp_millis(q.start)
+        .ok_or_else(|| ApiError::BadRequest("Invalid start timestamp".to_string()))?;
+    let end_dt: DateTime<Utc> = DateTime::from_timestamp_millis(q.end)
+        .ok_or_else(|| ApiError::BadRequest("Invalid end timestamp".to_string()))?;
+
+    let path = format!("camera/{}", id);
+    let base = mediamtx_playback_base();
+    let list_url = format!(
+        "{}/list?path={}&start={}&end={}",
+        base,
+        urlencoding::encode(&path),
+        urlencoding::encode(&start_dt.to_rfc3339()),
+        urlencoding::encode(&end_dt.to_rfc3339())
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| ApiError::Unknown(e.to_string()))?;
+
+    let res = client
+        .get(&list_url)
+        .send()
+        .await
+        .map_err(|e| ApiError::Unknown(format!("Timeline fetch failed: {}", e)))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        tracing::debug!(path = %path, status = %status, "MediaMTX list failed: {}", body);
+        return Ok(axum::Json(vec![]));
+    }
+
+    let entries: Vec<MediaMTXListEntry> = res
+        .json()
+        .await
+        .unwrap_or_default();
+
+    let segments: Vec<TimelineSegment> = entries
+        .into_iter()
+        .filter_map(|e| {
+            let dt = DateTime::parse_from_rfc3339(&e.start).ok()?;
+            let dt = dt.with_timezone(&Utc);
+            let start_ms = dt.timestamp_millis();
+            Some(TimelineSegment {
+                start_ms,
+                duration_sec: e.duration,
+            })
+        })
+        .collect();
+
+    Ok(axum::Json(segments))
 }

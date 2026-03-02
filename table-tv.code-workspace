@@ -61,7 +61,7 @@
         "presentation": {
           "reveal": "always",
           "panel": "dedicated",
-          "group": "rtsp"
+          "group": "dev"
         },
         "isBackground": true,
         "problemMatcher": []

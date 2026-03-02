@@ -193,5 +193,9 @@ pub fn routes() -> axum::Router<AppState> {
             "/api/cameras/:id/recordings/download",
             axum::routing::get(video::recording_download),
         )
+        .route(
+            "/api/cameras/:id/recordings/timeline",
+            axum::routing::get(video::recording_timeline),
+        )
         .route("/api/cameras/:id", get(cameras_get).put(cameras_update).delete(cameras_delete))
 }

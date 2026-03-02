@@ -189,6 +189,24 @@ export async function stopRtmpStream(cameraId) {
 }
 
 /**
+ * Fetch available recording segments for a camera in the given time range.
+ * @param {string} cameraId
+ * @param {number} startMs - Start time in milliseconds since epoch
+ * @param {number} endMs - End time in milliseconds since epoch
+ * @returns {Promise<{ start_ms: number, duration_sec: number }[]>}
+ */
+export async function getRecordingTimeline(cameraId, startMs, endMs) {
+  const res = await fetchWithAuth(
+    `/api/cameras/${encodeURIComponent(cameraId)}/recordings/timeline?start=${startMs}&end=${endMs}`
+  )
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to fetch recording timeline')
+  }
+  return res.json()
+}
+
+/**
  * Check if RTMP stream is active for a camera.
  * @param {string} cameraId
  * @returns {Promise<{ active: boolean }>}
