@@ -21,6 +21,8 @@ pub struct AppState {
     pub jwks: Option<Arc<auth::JwksCache>>,
     /// Token for server-side stream access (RTMP pipeline). Env STREAM_TOKEN or random at startup.
     pub stream_token: String,
+    /// MediaMTX is available and paths are synced. Stream/RTMP use MediaMTX URL when true.
+    pub mediamtx_available: Arc<RwLock<bool>>,
 }
 
 impl ApiServer {
@@ -51,6 +53,32 @@ impl ApiServer {
             format!("{:x}", hasher.finish())
         });
 
+        let mediamtx_available = Arc::new(RwLock::new(false));
+        let mediamtx_available_clone = mediamtx_available.clone();
+        let db_for_sync = db.clone();
+        tokio::spawn(async move {
+            const MAX_RETRIES: u32 = 15;
+            const RETRY_DELAY_SECS: u64 = 2;
+            for attempt in 1..=MAX_RETRIES {
+                if crate::video::sync_all_paths(&db_for_sync).await {
+                    if let Ok(mut guard) = mediamtx_available_clone.write() {
+                        *guard = true;
+                        tracing::info!("MediaMTX paths synced, streams will use MediaMTX proxy");
+                    }
+                    return;
+                }
+                if attempt < MAX_RETRIES {
+                    tracing::debug!(
+                        attempt,
+                        "MediaMTX not ready, retrying in {}s",
+                        RETRY_DELAY_SECS
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+                }
+            }
+            tracing::info!("MediaMTX unavailable after {} attempts, using direct camera URLs", MAX_RETRIES);
+        });
+
         let app_state = AppState {
             db: db.clone(),
             overlay: overlay.clone(),
@@ -58,6 +86,7 @@ impl ApiServer {
             rtmp_processes,
             jwks,
             stream_token,
+            mediamtx_available,
         };
 
         let mut app = Router::new()

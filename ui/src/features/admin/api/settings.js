@@ -1,6 +1,6 @@
 /**
  * Settings API client.
- * @returns {Promise<{ location_name: string }>}
+ * @returns {Promise<{ location_name: string, record_path: string, record_segment_duration: string, record_delete_after: string }>}
  */
 import { fetchWithAuth } from '../../../apiClient.js'
 
@@ -15,8 +15,8 @@ export async function getSettings() {
 
 /**
  * Update settings.
- * @param {{ location_name?: string }} settings
- * @returns {Promise<{ location_name: string }>}
+ * @param {{ location_name?: string, record_path?: string, record_segment_duration?: string, record_delete_after?: string }} settings
+ * @returns {Promise<{ location_name: string, record_path: string, record_segment_duration: string, record_delete_after: string }>}
  */
 export async function updateSettings(settings) {
   const res = await fetchWithAuth('/api/settings', {

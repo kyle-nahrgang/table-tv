@@ -81,7 +81,24 @@ pub async fn cameras_create(
     if req.name.is_empty() {
         return Err(ApiError::BadRequest("name is required".to_string()));
     }
+    let is_rtsp = req.camera_type.is_rtsp();
     let id = app.db.create_camera(req.name, req.camera_type)?;
+    let id_clone = id.clone();
+    // Sync to MediaMTX if it's an RTSP camera
+    if is_rtsp {
+        let db = app.db.clone();
+        let mediamtx_available = app.mediamtx_available.clone();
+        tokio::spawn(async move {
+            if let Ok(Some(camera)) = db.find_camera_by_id(&id_clone) {
+                let settings = db.get_settings().unwrap_or_default();
+                if let Err(e) = video::sync_camera_path(&camera, &settings).await {
+                    tracing::warn!(camera_id = %id_clone, error = %e, "MediaMTX sync failed");
+                } else if let Ok(mut guard) = mediamtx_available.write() {
+                    *guard = true;
+                }
+            }
+        });
+    }
     Ok(Json(serde_json::json!({ "id": id })))
 }
 
@@ -98,7 +115,27 @@ pub async fn cameras_update(
     if !valid_id(&id) {
         return Err(ApiError::BadRequest("Invalid camera id".to_string()));
     }
-    app.db.update_camera(&id, req.name, req.camera_type)?;
+    app.db.update_camera(&id, req.name, req.camera_type.clone())?;
+    if req.camera_type.is_rtsp() {
+        let db = app.db.clone();
+        let mediamtx_available = app.mediamtx_available.clone();
+        let id_clone = id.clone();
+        tokio::spawn(async move {
+            if let Ok(Some(camera)) = db.find_camera_by_id(&id_clone) {
+                let settings = db.get_settings().unwrap_or_default();
+                if let Err(e) = video::sync_camera_path(&camera, &settings).await {
+                    tracing::warn!(camera_id = %id_clone, error = %e, "MediaMTX sync failed");
+                } else if let Ok(mut guard) = mediamtx_available.write() {
+                    *guard = true;
+                }
+            }
+        });
+    } else {
+        let id_clone = id.clone();
+        tokio::spawn(async move {
+            let _ = video::delete_camera_path(&id_clone).await;
+        });
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -115,6 +152,10 @@ pub async fn cameras_delete(
     if !deleted {
         return Err(ApiError::CameraNotFound);
     }
+    let id_clone = id.clone();
+    tokio::spawn(async move {
+        let _ = video::delete_camera_path(&id_clone).await;
+    });
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -133,6 +174,10 @@ pub fn routes() -> axum::Router<AppState> {
         .route(
             "/api/cameras/:id/stream/rtmp/status",
             axum::routing::get(video::camera_stream_rtmp_status),
+        )
+        .route(
+            "/api/cameras/:id/recordings/download",
+            axum::routing::get(video::recording_download),
         )
         .route("/api/cameras/:id", get(cameras_get).put(cameras_update).delete(cameras_delete))
 }

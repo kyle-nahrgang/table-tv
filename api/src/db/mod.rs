@@ -73,11 +73,25 @@ impl Db {
             );
             CREATE TABLE IF NOT EXISTS settings (
                 id TEXT PRIMARY KEY,
-                location_name TEXT NOT NULL DEFAULT ''
+                location_name TEXT NOT NULL DEFAULT '',
+                record_path TEXT NOT NULL DEFAULT '',
+                record_segment_duration TEXT NOT NULL DEFAULT '1m',
+                record_delete_after TEXT NOT NULL DEFAULT '24h'
             );
-            INSERT OR IGNORE INTO settings (id, location_name) VALUES ('system', '');
+            INSERT OR IGNORE INTO settings (id, location_name, record_path, record_segment_duration, record_delete_after) VALUES ('system', '', '', '1m', '24h');
             ",
             )?;
+            // Migration: add rolling storage columns to settings if missing
+            let has_record_path: bool = conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('settings') WHERE name='record_path'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )? > 0;
+            if !has_record_path {
+                conn.execute("ALTER TABLE settings ADD COLUMN record_path TEXT NOT NULL DEFAULT ''", [])?;
+                conn.execute("ALTER TABLE settings ADD COLUMN record_segment_duration TEXT NOT NULL DEFAULT '1m'", [])?;
+                conn.execute("ALTER TABLE settings ADD COLUMN record_delete_after TEXT NOT NULL DEFAULT '24h'", [])?;
+            }
             // Migration: add score_history to pool_matches if missing (older DBs created before this column)
             let has_score_history: bool = conn.query_row(
                 "SELECT COUNT(*) FROM pragma_table_info('pool_matches') WHERE name='score_history'",

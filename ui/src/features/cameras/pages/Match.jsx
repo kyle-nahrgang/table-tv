@@ -21,11 +21,12 @@ import {
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import HistoryIcon from '@mui/icons-material/History'
+import DownloadIcon from '@mui/icons-material/Download'
 import StopIcon from '@mui/icons-material/Stop'
 import LiveTvIcon from '@mui/icons-material/LiveTv'
 import VideocamIcon from '@mui/icons-material/Videocam'
 import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
-import { getMatch, updateScore, endMatch } from '../api/poolMatches.js'
+import { getMatch, updateScore, endMatch, downloadGameRecording } from '../api/poolMatches.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
 import { getToken, urlWithToken } from '../../../apiClient.js'
 import { MatchDuration } from '../../../components/MatchDuration.jsx'
@@ -58,6 +59,7 @@ export function Match() {
   const [streamUrl, setStreamUrl] = useState('')
   const [streamError, setStreamError] = useState(false)
   const [previewLoaded, setPreviewLoaded] = useState(false)
+  const [downloadingGame, setDownloadingGame] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -419,6 +421,25 @@ export function Match() {
                 const p1Increased = entry.player_one_games_won > prev.player_one_games_won
                 const player = p1Increased ? match.player_one.name : match.player_two.name
                 const gameNumber = entry.player_one_games_won + entry.player_two_games_won
+                const startMs = i === 0 ? match.start_time : prev.timestamp
+                const durationSec = Math.max(1, (entry.timestamp - startMs) / 1000)
+                const isDownloading = downloadingGame === i
+                const handleDownload = async () => {
+                  if (!match.camera_id) return
+                  setDownloadingGame(i)
+                  try {
+                    await downloadGameRecording(
+                      match.camera_id,
+                      startMs,
+                      durationSec,
+                      `game-${gameNumber}.mp4`
+                    )
+                  } catch (err) {
+                    console.error('Download failed', err)
+                  } finally {
+                    setDownloadingGame(null)
+                  }
+                }
                 return (
                   <Box
                     key={i}
@@ -435,9 +456,19 @@ export function Match() {
                     <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140 }}>
                       {formatTime(entry.timestamp)}
                     </Typography>
-                    <Typography variant="body1" fontWeight={600}>
+                    <Typography variant="body1" fontWeight={600} sx={{ flex: 1 }}>
                       {player} won game {gameNumber}, {entry.player_one_games_won} – {entry.player_two_games_won}
                     </Typography>
+                    {match.camera_id && (
+                      <Button
+                        size="small"
+                        startIcon={<DownloadIcon />}
+                        onClick={handleDownload}
+                        disabled={isDownloading}
+                      >
+                        {isDownloading ? 'Downloading…' : 'Download'}
+                      </Button>
+                    )}
                   </Box>
                 )
               })}

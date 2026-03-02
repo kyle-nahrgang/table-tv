@@ -41,8 +41,9 @@
       {
         "label": "API + UI",
         "dependsOn": [
+          "mediamtx",
+          "ui",
           "api",
-          "ui"
         ],
         "dependsOrder": "parallel",
         "group": {

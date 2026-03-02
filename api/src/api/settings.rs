@@ -18,6 +18,9 @@ pub async fn get_settings(
 #[derive(Deserialize)]
 pub struct SettingsUpdateRequest {
     pub location_name: Option<String>,
+    pub record_path: Option<String>,
+    pub record_segment_duration: Option<String>,
+    pub record_delete_after: Option<String>,
 }
 
 /// PUT /api/settings - Update system settings.
@@ -26,11 +29,38 @@ pub async fn put_settings(
     State(app): State<AppState>,
     Json(req): Json<SettingsUpdateRequest>,
 ) -> Result<Json<SettingsDoc>, ApiError> {
+    let record_settings_changed = req.record_path.is_some()
+        || req.record_segment_duration.is_some()
+        || req.record_delete_after.is_some();
+
     let mut current = app.db.get_settings()?;
     if let Some(location_name) = req.location_name {
         current.location_name = location_name;
     }
+    if let Some(record_path) = req.record_path {
+        current.record_path = record_path;
+    }
+    if let Some(record_segment_duration) = req.record_segment_duration {
+        current.record_segment_duration = record_segment_duration;
+    }
+    if let Some(record_delete_after) = req.record_delete_after {
+        current.record_delete_after = record_delete_after;
+    }
     app.db.set_settings(current.clone())?;
+
+    // Re-sync MediaMTX paths when record settings change
+    if record_settings_changed {
+        let db = app.db.clone();
+        let mediamtx_available = app.mediamtx_available.clone();
+        tokio::spawn(async move {
+            if crate::video::sync_all_paths(&db).await {
+                if let Ok(mut guard) = mediamtx_available.write() {
+                    *guard = true;
+                }
+            }
+        });
+    }
+
     Ok(Json(current))
 }
 

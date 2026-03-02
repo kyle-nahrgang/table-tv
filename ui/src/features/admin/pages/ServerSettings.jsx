@@ -12,6 +12,11 @@ export function ServerSettings() {
   const [locationName, setLocationName] = useState('')
   const [locationNameSaving, setLocationNameSaving] = useState(false)
   const [locationNameSaved, setLocationNameSaved] = useState(false)
+  const [recordPath, setRecordPath] = useState('')
+  const [recordSegmentDuration, setRecordSegmentDuration] = useState('1m')
+  const [recordDeleteAfter, setRecordDeleteAfter] = useState('24h')
+  const [rollingSaving, setRollingSaving] = useState(false)
+  const [rollingSaved, setRollingSaved] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -25,6 +30,9 @@ export function ServerSettings() {
           setFacebookConfigured(fbStatus.configured)
           setFacebookRedirectUri(fbStatus.redirect_uri || '')
           setLocationName(settings.location_name || '')
+          setRecordPath(settings.record_path || '')
+          setRecordSegmentDuration(settings.record_segment_duration || '1m')
+          setRecordDeleteAfter(settings.record_delete_after || '24h')
         }
       } catch {
         if (!cancelled) setFacebookConfigured(false)
@@ -35,6 +43,24 @@ export function ServerSettings() {
     check()
     return () => { cancelled = true }
   }, [])
+
+  const handleSaveRollingStorage = async () => {
+    setRollingSaving(true)
+    setRollingSaved(false)
+    try {
+      await updateSettings({
+        record_path: recordPath,
+        record_segment_duration: recordSegmentDuration,
+        record_delete_after: recordDeleteAfter,
+      })
+      setRollingSaved(true)
+      setTimeout(() => setRollingSaved(false), 2000)
+    } catch {
+      // Error could be shown via snackbar
+    } finally {
+      setRollingSaving(false)
+    }
+  }
 
   const handleSaveLocationName = async () => {
     setLocationNameSaving(true)
@@ -79,6 +105,47 @@ export function ServerSettings() {
             disabled={locationNameSaving}
           >
             {locationNameSaving ? 'Saving…' : locationNameSaved ? 'Saved' : 'Save'}
+          </Button>
+        </Box>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Rolling Video Storage (MediaMTX)
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Configure rolling recording for all cameras. Recordings are stored in segments and automatically deleted after the retention period. Leave path empty for default location.
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 400 }}>
+          <TextField
+            label="Record path"
+            value={recordPath}
+            onChange={(e) => setRecordPath(e.target.value)}
+            placeholder="e.g. /app/data/recordings (empty = default)"
+            size="small"
+          />
+          <TextField
+            label="Segment duration"
+            value={recordSegmentDuration}
+            onChange={(e) => setRecordSegmentDuration(e.target.value)}
+            placeholder="e.g. 1m, 30m, 1h"
+            size="small"
+            helperText="Duration per segment file"
+          />
+          <TextField
+            label="Delete after"
+            value={recordDeleteAfter}
+            onChange={(e) => setRecordDeleteAfter(e.target.value)}
+            placeholder="e.g. 24h, 7d (empty = keep forever)"
+            size="small"
+            helperText="Auto-delete recordings after this period"
+          />
+          <Button
+            variant="contained"
+            onClick={handleSaveRollingStorage}
+            disabled={rollingSaving}
+          >
+            {rollingSaving ? 'Saving…' : rollingSaved ? 'Saved' : 'Save'}
           </Button>
         </Box>
       </Paper>

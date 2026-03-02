@@ -128,6 +128,18 @@ Set `AUTH0_CONNECTION=facebook` in `.env` to skip the Auth0 method selection pag
 
 **RTSP cameras:** Add a camera with type RTSP and the stream URL (e.g. `rtsp://192.168.1.100:554/stream`). The stream, match overlay, and RTMP Go Live all work for RTSP. Requires ffmpeg.
 
+### MediaMTX rolling recording (Docker)
+
+When running with Docker Compose, [MediaMTX](https://github.com/bluenviron/mediamtx) runs alongside Table TV to:
+
+- **Proxy camera streams** – MJPEG preview and FFmpeg (Facebook Live) read from MediaMTX instead of the camera, so the camera has a single connection and isn’t overloaded.
+- **Record rolling video** – Each camera is recorded in segments. Configure in **Server Settings → Rolling Video Storage**:
+  - **Record path** – Where to store recordings (e.g. `/recordings` in Docker; empty = `./recordings` relative to MediaMTX)
+- **Segment duration** – Length per file (e.g. `1m`, `30m`, `1h`). First file appears after this duration.
+- **Delete after** – Retention (e.g. `24h`, `7d`; empty = keep forever)
+
+Cameras are synced to MediaMTX automatically when added or updated.
+
 ### Test RTSP stream (MediaMTX + FFmpeg)
 
 To test RTSP without a real camera, use [MediaMTX](https://github.com/bluenviron/mediamtx) to receive the stream and FFmpeg to publish a test pattern. Install MediaMTX: `brew install mediamtx` (macOS).

@@ -14,7 +14,6 @@ import {
 import VideocamIcon from '@mui/icons-material/Videocam'
 import SportsEsportsIcon from '@mui/icons-material/SportsEsports'
 import { useAuth } from '../authStore.jsx'
-import { useApiInfo } from '../apiInfoStore.jsx'
 import { listCameras, formatCameraType, parseCameraType } from '../features/cameras/api/cameras.js'
 import { listMatches } from '../features/cameras/api/poolMatches.js'
 import { MatchDuration } from '../components/MatchDuration.jsx'
@@ -23,8 +22,7 @@ import { formatTime, getMatchWinner } from '../utils/format.js'
 export function Home() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isLoggedIn, isAdmin } = useAuth()
-  const { camerasConfigured, loading: apiInfoLoading } = useApiInfo()
+  const { isLoggedIn } = useAuth()
   const [cameras, setCameras] = useState([])
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
@@ -51,13 +49,6 @@ export function Home() {
     fetch()
     return () => { cancelled = true }
   }, [isLoggedIn])
-
-  // Direct admin to configure a camera when none exist
-  useEffect(() => {
-    if (isAdmin && !apiInfoLoading && !camerasConfigured) {
-      navigate('/admin/camera-settings', { replace: true })
-    }
-  }, [isAdmin, apiInfoLoading, camerasConfigured, navigate])
 
   const fetchMatches = useCallback(async () => {
     setMatchesLoading(true)

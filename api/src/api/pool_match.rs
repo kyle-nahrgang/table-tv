@@ -335,6 +335,11 @@ pub async fn pool_matches_update_score(
                 }),
             );
         }
+        // Finish current recording segment so segment boundaries align with score changes
+        let cid_clone = cid.clone();
+        tokio::spawn(async move {
+            let _ = video::finish_recording_segment(&cid_clone).await;
+        });
     }
     tracing::debug!(match_id = %id, "update score: overlay done, fetching camera name");
     let camera_name = updated
@@ -382,6 +387,11 @@ pub async fn pool_matches_end(
     tracing::debug!(match_id = %id, "end match: db update done, clearing overlay");
     if let Some(ref cid) = updated.camera_id {
         video::clear_overlay(&app.db, &app.overlay, cid, &app.rtmp_processes);
+        // Finish recording segment at match end
+        let cid_clone = cid.clone();
+        tokio::spawn(async move {
+            let _ = video::finish_recording_segment(&cid_clone).await;
+        });
     }
     tracing::debug!(match_id = %id, "end match: overlay done, fetching camera name");
     let camera_name = updated

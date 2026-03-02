@@ -121,6 +121,29 @@ export async function deleteMatch(matchId) {
 }
 
 /**
+ * Download recording for a game (score history entry).
+ * @param {string} cameraId
+ * @param {number} startMs - Start time in milliseconds (match start or prev score timestamp)
+ * @param {number} durationSec - Duration in seconds
+ * @param {string} filename - Suggested filename for download
+ * @returns {Promise<void>}
+ */
+export async function downloadGameRecording(cameraId, startMs, durationSec, filename = 'game.mp4') {
+  const url = `/api/cameras/${encodeURIComponent(cameraId)}/recordings/download?start=${startMs}&duration=${durationSec}`
+  const res = await fetchWithAuth(url)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to download recording')
+  }
+  const blob = await res.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+/**
  * @param {string} matchId
  * @returns {Promise<PoolMatch>}
  */

@@ -13,7 +13,7 @@ use crate::api::auth::{AuthenticatedUser, StreamAuth};
 use crate::api::AppState;
 use crate::db::camera::CameraType;
 use crate::error::ApiError;
-use crate::video::{overlay, rtmp, rtsp_camera, CameraSource};
+use crate::video::{self, overlay, rtmp, rtsp_camera, CameraSource};
 
 const MJPEG_BOUNDARY: &str = "frame";
 
@@ -41,7 +41,13 @@ pub async fn camera_stream(
                     "RTSP URL is not configured for this camera.".to_string(),
                 ));
             }
-            let s = match rtsp_camera::get_or_start_rtsp_stream(&id, url) {
+            // Use MediaMTX proxy when available (single connection to camera, rolling recording)
+            let stream_url = if app.mediamtx_available.read().map(|g| *g).unwrap_or(false) {
+                video::mediamtx_rtsp_url(&id)
+            } else {
+                url.to_string()
+            };
+            let s = match rtsp_camera::get_or_start_rtsp_stream(&id, &stream_url) {
                 Some(s) => s,
                 None => {
                     return Err(ApiError::BadRequest(
@@ -140,11 +146,19 @@ pub async fn camera_stream_rtmp_start(
     let location_name = settings.location_name.as_str();
     let camera_name = camera.name.as_str();
 
-    let rtsp_url = camera
-        .camera_type
-        .rtsp_url()
-        .filter(|u| !u.trim().is_empty())
-        .ok_or_else(|| ApiError::BadRequest("RTSP URL not configured for this camera.".to_string()))?;
+    let rtsp_url = {
+        let direct = camera
+            .camera_type
+            .rtsp_url()
+            .filter(|u| !u.trim().is_empty())
+            .ok_or_else(|| ApiError::BadRequest("RTSP URL not configured for this camera.".to_string()))?;
+        // Use MediaMTX proxy when available so FFmpeg doesn't overload the camera
+        if app.mediamtx_available.read().map(|g| *g).unwrap_or(false) {
+            video::mediamtx_rtsp_url(&id)
+        } else {
+            direct.to_string()
+        }
+    };
 
     let overlay_path = overlay::overlay_path_for_camera(&camera.name);
     let (stop_tx, stop_rx) = std::sync::mpsc::channel();
@@ -152,7 +166,7 @@ pub async fn camera_stream_rtmp_start(
     let id_clone = id.clone();
 
     match rtmp::spawn_rtmp_pipeline(
-        rtsp_url,
+        &rtsp_url,
         &req.url,
         stop_rx,
         rtmp.clone(),
