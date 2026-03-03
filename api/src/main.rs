@@ -9,7 +9,6 @@ pub mod video;
 #[tokio::main]
 async fn main() -> Result<(), crate::error::ApiError> {
     println!("[table-tv] main: starting");
-    let _config = config::init();
     tracing_subscriber::registry()
         .with(
             EnvFilter::try_from_default_env()
@@ -17,6 +16,8 @@ async fn main() -> Result<(), crate::error::ApiError> {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let _config = config::init();
     tracing::info!("[table-tv] main: opening db");
     let db = db::Db::open_default()?;
     tracing::info!("[table-tv] main: db ok, starting server");

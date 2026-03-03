@@ -152,7 +152,7 @@ impl ApiServer {
         let app = Self::router(db);
         let port = crate::config::config().port;
         let addr: std::net::SocketAddr = format!("0.0.0.0:{}", port).parse()?;
-        tracing::info!("starting api server");
+        tracing::info!(addr = %addr, "starting api server");
         let listener = tokio::net::TcpListener::bind(addr).await?;
         axum::serve(listener, app).await?;
         Ok(())

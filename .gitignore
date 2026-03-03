@@ -3,3 +3,6 @@ config.toml
 .DS_Store
 *.mp4
 recordings/
+node_modules/
+api/package-lock.json
+api/package.json
