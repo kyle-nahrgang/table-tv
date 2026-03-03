@@ -38,13 +38,13 @@ export function MatchScoreControls({
           <IconButton
             size="small"
             onClick={() => onScoreChange(1, -1)}
-            disabled={scoreUpdating || isPractice || p1.games_won === 0}
+            disabled={scoreUpdating || p1.games_won === 0}
             aria-label={isPractice ? 'Decrease racks' : 'Decrease player 1 score'}
           >
             <RemoveIcon />
           </IconButton>
           <Typography variant="h5" component="span" sx={{ minWidth: 40, textAlign: 'center' }}>
-            {p1.games_won}
+            {isPractice ? p1.games_won + 1 : p1.games_won}
           </Typography>
           <IconButton
             size="small"
@@ -103,11 +103,14 @@ export function MatchScoreControls({
           {isPractice ? 'End practice' : 'End match early'}
         </Button>
       )}
-      {!isActive && showEndedMessage && (
-        <Typography color="text.secondary" variant="body2">
-          {formatMatchWinner(match)}
-        </Typography>
-      )}
+      {!isActive && showEndedMessage && (() => {
+        const endedMessage = formatMatchWinner(match)
+        return endedMessage ? (
+          <Typography color="text.secondary" variant="body2">
+            {endedMessage}
+          </Typography>
+        ) : null
+      })()}
     </Stack>
   )
 }

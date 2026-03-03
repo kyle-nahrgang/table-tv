@@ -105,10 +105,12 @@ export function getMatchWinner(match) {
 
 /**
  * Format match winner for display: "Name won" or "Ended early".
+ * Returns null for practice matches (no winner/ended-early concept).
  * @param {Parameters<typeof getMatchWinner>[0]} match
- * @returns {string}
+ * @returns {string|null}
  */
 export function formatMatchWinner(match) {
+  if (match?.match_type === 'practice') return null
   const winner = getMatchWinner(match)
   return winner ? `${winner} won` : 'Ended early'
 }
@@ -149,7 +151,7 @@ export function isRecordingAvailable(endTimestampMs, recordDeleteAfter) {
  */
 export function formatMatchTitle(match) {
   if (match?.match_type === 'practice') {
-    const racks = match.player_one.games_won
+    const racks = match.end_time ? match.player_one.games_won : match.player_one.games_won + 1
     return `Practice: ${match.player_one.name}${racks > 0 ? ` | ${racks} rack${racks !== 1 ? 's' : ''}` : ''}`
   }
   return `${match.player_one.name} vs ${match.player_two.name}`

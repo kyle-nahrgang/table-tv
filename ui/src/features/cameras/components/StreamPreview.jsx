@@ -187,7 +187,7 @@ export function StreamPreview({
                     Practice: {match.player_one.name}
                   </Typography>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    Rack #{match.player_one.games_won}
+                    Rack #{match.player_one.games_won + 1}
                   </Typography>
                 </>
               ) : (

@@ -32,7 +32,7 @@ import { getToken, urlWithToken } from '../../../apiClient.js'
 import { MatchDuration } from '../../../components/MatchDuration.jsx'
 import { StreamPreview } from '../components/StreamPreview.jsx'
 import { MatchScoreControls } from '../components/MatchScoreControls.jsx'
-import { formatTime, formatDuration, formatMatchWinner, formatMatchTitle, getMatchWinner, isRecordingAvailable, formatRecordingFilename } from '../../../utils/format.js'
+import { formatTime, formatDuration, formatMatchWinner, formatMatchTitle, isRecordingAvailable, formatRecordingFilename } from '../../../utils/format.js'
 
 export function Match() {
   const { id } = useParams()
@@ -294,11 +294,13 @@ export function Match() {
     )
   }
 
+  const rackCount = match.match_type === 'practice'
+    ? (match.end_time ? match.player_one.games_won : match.player_one.games_won + 1)
+    : null
   const score = match.match_type === 'practice'
-    ? `${match.player_one.games_won} rack${match.player_one.games_won !== 1 ? 's' : ''}`
+    ? `${rackCount} rack${rackCount !== 1 ? 's' : ''}`
     : `${match.player_one.games_won} - ${match.player_two.games_won}`
   const isActive = !match.end_time
-  const winner = getMatchWinner(match)
   const hasStream = !!camera
 
   return (
@@ -315,13 +317,16 @@ export function Match() {
             {score}
           </Typography>
           {isActive && <Chip label="In progress" color="primary" size="small" />}
-          {match.end_time && (
-            <Chip
-              label={formatMatchWinner(match)}
-              color="default"
-              size="small"
-            />
-          )}
+          {match.end_time && (() => {
+            const endedLabel = formatMatchWinner(match)
+            return endedLabel ? (
+              <Chip
+                label={endedLabel}
+                color="default"
+                size="small"
+              />
+            ) : null
+          })()}
         </Box>
 
         <Box sx={{ mb: 2 }}>
@@ -404,11 +409,14 @@ export function Match() {
               onScoreChange={handleScoreChange}
               onEndMatch={handleEndMatch}
             />
-          ) : (
-            <Typography color="text.secondary" variant="body2">
-              {formatMatchWinner(match)}
-            </Typography>
-          )}
+          ) : (() => {
+            const endedMessage = formatMatchWinner(match)
+            return endedMessage ? (
+              <Typography color="text.secondary" variant="body2">
+                {endedMessage}
+              </Typography>
+            ) : null
+          })()}
         </Box>
 
         {(match.score_history?.length ?? 0) > 0 && (
@@ -453,19 +461,28 @@ export function Match() {
                     component="li"
                     sx={{
                       display: 'flex',
-                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      alignItems: 'flex-start',
                       gap: 2,
                       py: 1,
                       borderBottom: i < match.score_history.length - 1 ? 1 : 0,
                       borderColor: 'divider',
                     }}
                   >
-                    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 280 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ minWidth: 0, flex: { xs: '1 1 100%', sm: '0 0 auto' } }}
+                    >
                       {formatTime(startMs, 'withSeconds')} – {formatTime(entry.timestamp, 'withSeconds')}
                       {' · '}
                       {formatDuration(entry.timestamp - startMs)}
                     </Typography>
-                    <Typography variant="body1" fontWeight={600} sx={{ flex: 1 }}>
+                    <Typography
+                      variant="body1"
+                      fontWeight={600}
+                      sx={{ minWidth: 0, flex: '1 1 0' }}
+                    >
                       {match.match_type === 'practice'
                         ? `Rack ${rackNumber}`
                         : `${player} won game ${gameNumber}, ${entry.player_one_games_won} – ${entry.player_two_games_won}`}
@@ -476,6 +493,7 @@ export function Match() {
                         startIcon={<DownloadIcon />}
                         onClick={handleDownload}
                         disabled={isDownloading}
+                        sx={{ flex: { xs: '1 1 auto', sm: '0 0 auto' } }}
                       >
                         {isDownloading ? 'Downloading…' : 'Download'}
                       </Button>

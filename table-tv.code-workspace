@@ -24,25 +24,9 @@
         "problemMatcher": []
       },
       {
-        "label": "ui",
-        "type": "shell",
-        "command": "npm run dev",
-        "options": {
-          "cwd": "${workspaceFolder}/ui"
-        },
-        "presentation": {
-          "reveal": "always",
-          "panel": "dedicated",
-          "group": "dev"
-        },
-        "isBackground": true,
-        "problemMatcher": []
-      },
-      {
         "label": "API + UI",
         "dependsOn": [
           "mediamtx",
-          "ui",
           "api",
         ],
         "dependsOrder": "parallel",

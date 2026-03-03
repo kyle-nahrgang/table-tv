@@ -17,7 +17,7 @@ import { useAuth } from '../authStore.jsx'
 import { listCameras, formatCameraType, parseCameraType } from '../features/cameras/api/cameras.js'
 import { listMatches } from '../features/cameras/api/poolMatches.js'
 import { MatchDuration } from '../components/MatchDuration.jsx'
-import { formatTime, formatMatchTitle, getMatchWinner } from '../utils/format.js'
+import { formatTime, formatMatchTitle, formatMatchWinner } from '../utils/format.js'
 
 export function Home() {
   const navigate = useNavigate()
@@ -107,10 +107,12 @@ export function Home() {
         <Paper variant="outlined" sx={{ mb: 3 }}>
           <List disablePadding>
             {matches.map((match) => {
+              const rackCount = match.match_type === 'practice'
+                ? (match.end_time ? match.player_one.games_won : match.player_one.games_won + 1)
+                : null
               const score = match.match_type === 'practice'
-                ? `${match.player_one.games_won} rack${match.player_one.games_won !== 1 ? 's' : ''}`
+                ? `${rackCount} rack${rackCount !== 1 ? 's' : ''}`
                 : `${match.player_one.games_won} - ${match.player_two.games_won}`
-              const winner = getMatchWinner(match)
               const secondary = (
                 <>
                   {formatTime(match.start_time, 'short')}
@@ -120,17 +122,20 @@ export function Home() {
                   {match.started_by && (
                     <> · Started by {match.started_by}</>
                   )}
-                  {match.end_time && (
-                    <>
-                      {' '}
-                      <Chip
-                        label={winner ? `${winner} won` : 'Ended early'}
-                        size="small"
-                        component="span"
-                        sx={{ verticalAlign: 'middle' }}
-                      />
-                    </>
-                  )}
+                  {match.end_time && (() => {
+                    const endedLabel = formatMatchWinner(match)
+                    return endedLabel ? (
+                      <>
+                        {' '}
+                        <Chip
+                          label={endedLabel}
+                          size="small"
+                          component="span"
+                          sx={{ verticalAlign: 'middle' }}
+                        />
+                      </>
+                    ) : null
+                  })()}
                 </>
               )
               return (

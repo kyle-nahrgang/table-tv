@@ -436,6 +436,11 @@ pub async fn pool_matches_end(
             "Only the match creator or an admin can end the match".to_string(),
         ));
     }
+    // For practice: add one rack when ending (rack in progress counts as completed)
+    if doc.match_type == MatchType::Practice {
+        let extra = doc.player_one.games_won.saturating_add(1);
+        let _ = app.db.update_pool_match_games_won(&id, 1, extra)?;
+    }
     tracing::debug!(match_id = %id, "end match: calling end_pool_match");
     let updated = app.db.end_pool_match(&id)?;
     tracing::debug!(match_id = %id, "end match: db update done, clearing overlay");

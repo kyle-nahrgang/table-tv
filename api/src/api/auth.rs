@@ -19,6 +19,23 @@ use tokio::sync::RwLock;
 use crate::api::AppState;
 use crate::error::ApiError;
 
+/// Response from Auth0 /userinfo endpoint.
+#[derive(Debug, Deserialize)]
+struct UserInfoResponse {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    given_name: Option<String>,
+    #[serde(default)]
+    family_name: Option<String>,
+    #[serde(default)]
+    nickname: Option<String>,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    picture: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Auth0Claims {
     sub: String,
@@ -248,6 +265,43 @@ fn name_from_claims(claims: &Auth0Claims) -> String {
         })
 }
 
+/// True when JWT has no profile data (name, email, etc.) - used to decide whether to fetch userinfo.
+fn used_profile_fallback(claims: &Auth0Claims) -> bool {
+    let has_name = claims.name.as_ref().map_or(false, |s| !s.is_empty());
+    let has_given = claims.given_name.as_ref().map_or(false, |s| !s.is_empty());
+    let has_family = claims.family_name.as_ref().map_or(false, |s| !s.is_empty());
+    let has_nickname = claims.nickname.as_ref().map_or(false, |s| !s.is_empty());
+    let email = email_from_claims(claims);
+    let has_real_email = !email.ends_with("@auth0.local");
+    !has_name && !has_given && !has_family && !has_nickname && !has_real_email
+}
+
+/// Fetch user profile from Auth0 userinfo endpoint. Used when JWT lacks profile claims (e.g. Facebook).
+async fn fetch_userinfo(domain: &str, token: &str) -> Result<UserInfoResponse, ApiError> {
+    let base = domain.trim_end_matches('/');
+    let url = if base.starts_with("http") {
+        format!("{}/userinfo", base)
+    } else {
+        format!("https://{}/userinfo", base)
+    };
+    let client = reqwest::Client::new();
+    let res = client
+        .get(&url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| ApiError::Auth0ClientError(format!("Failed to fetch userinfo: {}", e)))?;
+    if !res.status().is_success() {
+        return Err(ApiError::Auth0ClientError(format!(
+            "Userinfo returned {}",
+            res.status()
+        )));
+    }
+    res.json()
+        .await
+        .map_err(|e| ApiError::Auth0ClientError(format!("Failed to parse userinfo: {}", e)))
+}
+
 /// Extract Bearer token from Authorization header.
 fn bearer_token_from_request(req: &Request<axum::body::Body>) -> impl Iterator<Item = &str> {
     req.headers()
@@ -309,9 +363,8 @@ where
         let token = token_from_parts(parts).ok_or(ApiError::InvalidCredentials)?;
 
         let claims = validate_token(jwks, &token, &audiences, &issuer).await?;
-        let email = email_from_claims(&claims);
-        let name = name_from_claims(&claims);
-        let picture = claims.picture.clone().filter(|s| !s.is_empty());
+        let (name, email, picture) =
+            resolve_profile(&claims, &token, &domain).await;
         let user = app_state.db.upsert_user(claims.sub.clone(), email)?;
 
         Ok(AuthenticatedUser {
@@ -361,6 +414,47 @@ where
     }
 }
 
+/// Resolve name, email, picture from claims, optionally enriching from Auth0 userinfo when JWT lacks profile.
+async fn resolve_profile(
+    claims: &Auth0Claims,
+    token: &str,
+    domain: &str,
+) -> (String, String, Option<String>) {
+    let mut email = email_from_claims(claims);
+    let mut name = name_from_claims(claims);
+    let mut picture = claims.picture.clone().filter(|s| !s.is_empty());
+
+    if used_profile_fallback(claims) {
+        if let Ok(userinfo) = fetch_userinfo(domain, token).await {
+            if let Some(n) = userinfo
+                .name
+                .filter(|s| !s.is_empty())
+                .or_else(|| {
+                    let g = userinfo.given_name.filter(|s| !s.is_empty());
+                    let f = userinfo.family_name.filter(|s| !s.is_empty());
+                    match (g, f) {
+                        (Some(gg), Some(ff)) => Some(format!("{} {}", gg, ff)),
+                        (Some(gg), None) => Some(gg),
+                        (None, Some(ff)) => Some(ff),
+                        (None, None) => None,
+                    }
+                })
+                .or_else(|| userinfo.nickname.filter(|s| !s.is_empty()))
+            {
+                name = n;
+            }
+            if let Some(e) = userinfo.email.filter(|s| !s.is_empty()) {
+                email = e;
+            }
+            if let Some(p) = userinfo.picture.filter(|s| !s.is_empty()) {
+                picture = Some(p);
+            }
+        }
+    }
+
+    (name, email, picture)
+}
+
 /// GET /api/auth/me - Validate Bearer token, sync user to DB, return user info.
 pub async fn auth_me(
     State(app): State<AppState>,
@@ -379,10 +473,8 @@ pub async fn auth_me(
         .ok_or(ApiError::InvalidCredentials)?;
 
     let claims = validate_token(jwks, token, &audiences, &issuer).await?;
-    let email = email_from_claims(&claims);
-    let name = name_from_claims(&claims);
-    let picture = claims.picture.clone().filter(|s| !s.is_empty());
-    let user = app.db.upsert_user(claims.sub.clone(), email)?;
+    let (name, email, picture) = resolve_profile(&claims, token, &domain).await;
+    let user = app.db.upsert_user(claims.sub.clone(), email.clone())?;
 
     Ok(Json(AuthMeResponse {
         sub: user.auth0_sub,

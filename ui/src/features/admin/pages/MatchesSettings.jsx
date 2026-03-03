@@ -110,8 +110,11 @@ export function MatchesSettings() {
                 </TableRow>
               ) : (
                 matches.map((match) => {
+                  const rackCount = match.match_type === 'practice'
+                    ? (match.end_time ? match.player_one.games_won : match.player_one.games_won + 1)
+                    : null
                   const score = match.match_type === 'practice'
-                    ? `${match.player_one.games_won} rack${match.player_one.games_won !== 1 ? 's' : ''}`
+                    ? `${rackCount} rack${rackCount !== 1 ? 's' : ''}`
                     : `${match.player_one.games_won} - ${match.player_two.games_won}`
                   const durationMs = (match.end_time ?? Date.now()) - match.start_time
                   return (
@@ -126,11 +129,20 @@ export function MatchesSettings() {
                       <TableCell>{formatDuration(durationMs, { includeSeconds: false })}</TableCell>
                       <TableCell>
                         {match.end_time ? (
-                          <Chip
-                            label={formatMatchWinner(match)}
-                            size="small"
-                            color="default"
-                          />
+                          (() => {
+                            const endedLabel = formatMatchWinner(match)
+                            return endedLabel ? (
+                              <Chip
+                                label={endedLabel}
+                                size="small"
+                                color="default"
+                              />
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">
+                                —
+                              </Typography>
+                            )
+                          })()
                         ) : (
                           <Chip label="Ongoing" size="small" color="primary" />
                         )}

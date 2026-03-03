@@ -246,7 +246,7 @@ fn draw_practice_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &Fon
     let line_h = 24i32;
 
     let left_text = format!("Practice: {}", overlay.player_one.name);
-    let right_text = format!("Rack #{}", overlay.player_one.games_won);
+    let right_text = format!("Rack #{}", overlay.player_one.games_won + 1);
     draw_text_mut(
         img,
         white,

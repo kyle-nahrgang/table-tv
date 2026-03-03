@@ -175,9 +175,9 @@ impl From<ConfigFile> for AppConfig {
 /// Load config from file. Search order: /etc/table-tv/table-tv.config, ./table-tv.config, ../table-tv.config.
 pub fn load() -> AppConfig {
     let candidates: Vec<std::path::PathBuf> = [
-        std::path::Path::new("./config.toml"),
-        std::path::Path::new("../config.toml"),
-        std::path::Path::new("/etc/table-tv/config.toml"),
+        std::path::Path::new("./table-tv.config"),
+        std::path::Path::new("../table-tv.config"),
+        std::path::Path::new("/etc/table-tv/table-tv.config"),
     ]
     .into_iter()
     .map(std::path::PathBuf::from)
