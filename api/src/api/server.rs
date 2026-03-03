@@ -126,6 +126,15 @@ impl ApiServer {
                     .map(Path::new)
                     .find(|p| p.exists())
                     .map(Path::to_path_buf)
+            })
+            .or_else(|| {
+                // When running release binary from target/release/, ui-dist is next to the exe
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| {
+                        let candidate = exe.parent()?.join("ui-dist");
+                        candidate.exists().then_some(candidate)
+                    })
             });
         if let Some(ref ui_dist) = ui_dist {
             let path = ui_dist.to_string_lossy();
