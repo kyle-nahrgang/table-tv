@@ -155,33 +155,38 @@ export async function downloadGameRecording(cameraId, startMs, durationSec, file
 }
 
 /**
- * Share recording via the native share sheet (e.g. "Save to Photos" on iOS).
- * Use when the user wants to save to Photos instead of Files.
- * On mobile, use this for both "Save to Photos" and "Save to Files" since
- * Safari ignores the download attribute for blob URLs.
+ * Fetch recording as a File for sharing. Call this first, then call shareFile()
+ * in direct response to a user tap. Safari requires share() to be triggered
+ * by a user gesture; calling it after async fetch loses the gesture.
  * @param {string} cameraId
  * @param {number} startMs - Start time in milliseconds
  * @param {number} durationSec - Duration in seconds
  * @param {string} filename - Suggested filename for the shared file
- * @returns {Promise<void>}
+ * @returns {Promise<File>}
  */
-export async function shareGameRecording(cameraId, startMs, durationSec, filename = 'game.mp4') {
+export async function fetchGameRecordingForShare(cameraId, startMs, durationSec, filename = 'game.mp4') {
   const url = `/api/cameras/${encodeURIComponent(cameraId)}/recordings/download?start=${startMs}&duration=${durationSec}`
   const res = await fetchWithAuth(url)
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to download recording')
   }
-  // Use arrayBuffer to ensure the full file is in memory before sharing.
-  // iOS Safari can fail silently with lazy blobs from response.blob().
   const arrayBuffer = await res.arrayBuffer()
   const blob = new Blob([arrayBuffer], { type: 'video/mp4' })
-  const file = new File([blob], filename, { type: 'video/mp4' })
+  return new File([blob], filename, { type: 'video/mp4' })
+}
+
+/**
+ * Share a File via the native share sheet. Must be called in direct response
+ * to a user tap (e.g. button click) — Safari rejects share() after async ops.
+ * @param {File} file - From fetchGameRecordingForShare()
+ * @returns {Promise<void>}
+ */
+export async function shareFile(file) {
   if (!navigator.canShare({ files: [file] })) {
     throw new Error('Sharing this file is not supported on this device')
   }
   try {
-    // iOS cannot share text and files together; share files only
     await navigator.share({ files: [file] })
   } catch (err) {
     const msg = err?.message?.toLowerCase?.() || ''

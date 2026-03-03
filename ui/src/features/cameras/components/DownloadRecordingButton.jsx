@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Button, Menu, MenuItem } from '@mui/material'
+import { Button, Dialog, DialogTitle, DialogContent, DialogActions, Menu, MenuItem } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary'
 import FolderIcon from '@mui/icons-material/Folder'
-import { downloadGameRecording, shareGameRecording, canShareVideo } from '../api/poolMatches.js'
+import { downloadGameRecording, fetchGameRecordingForShare, shareFile, canShareVideo } from '../api/poolMatches.js'
 
 /**
  * Button to download a game recording. On mobile (when Web Share API supports files),
@@ -39,6 +39,8 @@ export function DownloadRecordingButton({
 }) {
   const [anchorEl, setAnchorEl] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [pendingShareFile, setPendingShareFile] = useState(null)
   const showMenu = canShareVideo()
 
   const getStartMs = () => (typeof startMs === 'function' ? startMs() : startMs)
@@ -60,10 +62,40 @@ export function DownloadRecordingButton({
     }
   }
 
-  // On mobile, both options use share (Safari ignores download attribute for blob URLs)
-  const handleShare = () => runAction(() => shareGameRecording(cameraId, getStartMs(), durationSec, filename))
+  // On mobile: fetch first, then show dialog. Share must be triggered by a fresh user tap
+  // (Safari rejects share() after async fetch — loses transient activation).
+  const handleShareOption = async () => {
+    setAnchorEl(null)
+    setLoading(true)
+    onLoadingStart?.()
+    try {
+      const file = await fetchGameRecordingForShare(cameraId, getStartMs(), durationSec, filename)
+      setPendingShareFile(file)
+      setShareDialogOpen(true)
+    } catch (err) {
+      console.error('Fetch for share failed', err)
+      onError?.(err)
+    } finally {
+      setLoading(false)
+      onLoadingEnd?.()
+    }
+  }
+
+  const handleShareFromDialog = () => {
+    if (!pendingShareFile) return
+    setShareDialogOpen(false)
+    const file = pendingShareFile
+    setPendingShareFile(null)
+    runAction(() => shareFile(file))
+  }
+
+  const handleCloseShareDialog = () => {
+    setShareDialogOpen(false)
+    setPendingShareFile(null)
+  }
+
   const handleDownload = showMenu
-    ? handleShare
+    ? handleShareOption
     : () => runAction(() => downloadGameRecording(cameraId, getStartMs(), durationSec, filename))
 
   const isDisabled = disabled || loading
@@ -89,21 +121,27 @@ export function DownloadRecordingButton({
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
-          <MenuItem
-            onClick={handleShare}
-            disabled={loading}
-          >
+          <MenuItem onClick={handleShareOption} disabled={loading}>
             <PhotoLibraryIcon fontSize="small" sx={{ mr: 1 }} />
             Save to Photos
           </MenuItem>
-          <MenuItem
-            onClick={handleDownload}
-            disabled={loading}
-          >
+          <MenuItem onClick={handleShareOption} disabled={loading}>
             <FolderIcon fontSize="small" sx={{ mr: 1 }} />
             Save to Files
           </MenuItem>
         </Menu>
+        <Dialog open={shareDialogOpen} onClose={handleCloseShareDialog}>
+          <DialogTitle>Video ready</DialogTitle>
+          <DialogContent>
+            Tap below to open the share sheet, then choose &quot;Save Video&quot; or &quot;Save to Files&quot;.
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseShareDialog}>Cancel</Button>
+            <Button variant="contained" onClick={handleShareFromDialog} startIcon={<DownloadIcon />}>
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
       </>
     )
   }
