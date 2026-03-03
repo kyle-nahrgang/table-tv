@@ -1,18 +1,20 @@
 # Table TV
 
-A simple app with an API and UI, served together.
+A simple app with an API and UI, served together. Runs on Linux with ffmpeg, MediaMTX, stunnel, and Avahi installed as needed.
 
-## Quick Start (Docker)
+## Quick Start
 
-1. Build and run:
+**Terminal 1 – API:**
+```bash
+cd api && cargo run
+```
 
-   ```bash
-   docker compose up --build
-   ```
+**Terminal 2 – UI:**
+```bash
+cd ui && npm run dev
+```
 
-2. Open in your browser:
-   - **<http://localhost>** or **<http://127.0.0.1>**
-   - For **<http://table-tv.local>**, add to `/etc/hosts`: `127.0.0.1 table-tv.local`
+The UI proxies `/api` to the API. Open <http://localhost:5173>.
 
 ## Local Development
 
@@ -128,13 +130,13 @@ Set `AUTH0_CONNECTION=facebook` in `.env` to skip the Auth0 method selection pag
 
 **RTSP cameras:** Add a camera with type RTSP and the stream URL (e.g. `rtsp://192.168.1.100:554/stream`). The stream, match overlay, and RTMP Go Live all work for RTSP. Requires ffmpeg.
 
-### MediaMTX rolling recording (Docker)
+### MediaMTX rolling recording
 
-When running with Docker Compose, [MediaMTX](https://github.com/bluenviron/mediamtx) runs alongside Table TV to:
+[MediaMTX](https://github.com/bluenviron/mediamtx) can run alongside Table TV to:
 
 - **Proxy camera streams** – MJPEG preview and FFmpeg (Facebook Live) read from MediaMTX instead of the camera, so the camera has a single connection and isn’t overloaded.
 - **Record rolling video** – Each camera is recorded in segments. Configure in **Server Settings → Rolling Video Storage**:
-  - **Record path** – Where to store recordings (e.g. `/recordings` in Docker; empty = `./recordings` relative to MediaMTX)
+  - **Record path** – Where to store recordings (empty = `./recordings` relative to MediaMTX)
 - **Segment duration** – Length per file (e.g. `1m`, `30m`, `1h`). First file appears after this duration.
 - **Delete after** – Retention (e.g. `24h`, `7d`; empty = keep forever)
 
@@ -142,7 +144,7 @@ Cameras are synced to MediaMTX automatically when added or updated.
 
 ### Test RTSP stream (MediaMTX + FFmpeg)
 
-To test RTSP without a real camera, use [MediaMTX](https://github.com/bluenviron/mediamtx) to receive the stream and FFmpeg to publish a test pattern. Install MediaMTX: `brew install mediamtx` (macOS).
+To test RTSP without a real camera, use [MediaMTX](https://github.com/bluenviron/mediamtx) to receive the stream and FFmpeg to publish a test pattern.
 
 1. Create mediamtx.yml:
 
@@ -170,7 +172,6 @@ paths:
 
 RTMP export (YouTube, Facebook, etc.) uses **ffmpeg** to read the RTSP stream and push to RTMP. Works for RTSP cameras. The API requires ffmpeg to be installed and in `PATH`.
 
-- **macOS:** `brew install ffmpeg`
 - **Ubuntu/Debian:** `sudo apt install ffmpeg`
 
 ### Facebook Live "Input/output error" – stunnel workaround
@@ -178,7 +179,6 @@ RTMP export (YouTube, Facebook, etc.) uses **ffmpeg** to read the RTSP stream an
 FFmpeg's native RTMPS support often fails when streaming to Facebook Live. Use **stunnel** as a relay:
 
 1. **Install stunnel**
-   - macOS: `brew install stunnel`
    - Ubuntu/Debian: `sudo apt install stunnel4`
 
 2. **Create stunnel config** (e.g. `stunnel-fb.conf`):
@@ -201,5 +201,3 @@ FFmpeg's native RTMPS support often fails when streaming to Facebook Live. Use *
    ```
 
    The API will send the stream to `rtmp://127.0.0.1:19350`, and stunnel will forward it over TLS to Facebook.
-
-**Docker:** stunnel is included in the image. Add `USE_STUNNEL_FOR_RTMPS=1` to your `.env` and run `docker compose up`. The entrypoint starts stunnel automatically when that env var is set.

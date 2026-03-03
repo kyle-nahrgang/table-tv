@@ -1,7 +1,7 @@
 # Table TV configuration - copy to config.toml and customize
 # cp /etc/table-tv/config.toml.example /etc/table-tv/config.toml
 
-port = 8080
+port = 80
 sqlite_path = "/var/lib/table-tv/table-tv.db"
 ui_dist_path = "/usr/share/table-tv/ui-dist"
 

@@ -21,15 +21,5 @@ if [ "$USE_STUNNEL_FOR_RTMPS" = "1" ]; then
     stunnel /etc/table-tv/stunnel-fb.conf &
 fi
 
-# API on 8080 (internal only - nginx proxies /api to it)
-/usr/bin/table-tv-api &
-# Wait for API to be ready (max 15s)
-for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    if curl -sf http://127.0.0.1:8080/api/info >/dev/null 2>&1; then
-        break
-    fi
-    sleep 1
-done
-
-# Nginx on 80: serves UI, proxies /api to API
-exec nginx -c /etc/table-tv/nginx.conf -g 'daemon off;'
+# API on 80: serves UI and /api (ui_dist_path from config)
+exec /usr/bin/table-tv-api

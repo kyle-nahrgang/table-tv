@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// API port when running UI dev server (npm run dev). API runs at 8080 locally, 80 in Docker.
+// API port when running UI dev server (npm run dev).
 const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:8080'
 
 // https://vite.dev/config/

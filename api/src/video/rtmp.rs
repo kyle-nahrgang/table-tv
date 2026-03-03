@@ -1,5 +1,5 @@
 //! RTMP streaming pipeline. Spawns ffmpeg to read directly from RTSP URL and push to RTMP.
-//! When running in container, adds drawtext overlay: location (top left), camera name (underneath), time (top right).
+//! Adds drawtext overlay: location (top left), camera name (underneath), time (top right).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -124,17 +124,10 @@ fn escape_drawtext(s: &str) -> String {
         .replace('\'', "'\\''")
 }
 
-/// Build filter_complex: overlay below video (vstack) + optional drawtext when in container.
+/// Build filter_complex: overlay below video (vstack) + drawtext.
 /// Overlay PNG is placed BELOW the video, increasing output height by 80px.
 /// Input 0: RTSP (video+audio), Input 1: anullsrc, Input 2: overlay.
 fn build_filter_complex(location_name: &str, camera_name: &str) -> String {
-    // Scale to 960x540 (qHD) for lighter encoding; overlay is 1280 wide so scale overlay to match.
-    // fps=30:round=near for smoother frame timing from variable-rate RTSP
-    // loop=-1:1:0 makes overlay infinite (image2 reports 1-frame duration, which would limit vstack)
-    let base_filter = "[0:v]fps=30:round=near,scale=960:540[main];[2:v]loop=-1:1:0,scale=960:80,format=yuv420p[overlay];[main][overlay]vstack=inputs=2,format=yuv420p[out]";
-    if !std::path::Path::new("/.dockerenv").exists() {
-        return base_filter.to_string();
-    }
     let font = "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
     let base = "fontsize=20:fontcolor=white";
     let mut parts: Vec<String> = vec![];
@@ -237,7 +230,7 @@ fn maybe_rewrite_rtmps_for_stunnel(url: &str) -> String {
 }
 
 /// Spawn RTMP pipeline. Reads directly from RTSP URL and pushes to RTMP.
-/// When running in container, draws location (top left), camera name (underneath), and time (top right).
+/// Draws location (top left), camera name (underneath), and time (top right).
 pub fn spawn_rtmp_pipeline(
     rtsp_url: &str,
     rtmp_url: &str,
@@ -250,42 +243,19 @@ pub fn spawn_rtmp_pipeline(
 ) -> Result<(), String> {
     let overlay_path_str = resolve_overlay_path(overlay_path)?;
 
-    let (encoder, encoder_extra) = if cfg!(target_os = "macos") {
-        // Use libx264 on macOS; VideoToolbox has frame buffering that can throttle output
-        (
-            "libx264",
-            [
-                "-preset", "ultrafast",
-                "-tune", "zerolatency",
-                "-pix_fmt", "yuv420p",
-                "-b:v", "2500k",
-                "-maxrate", "2500k",
-                "-bufsize", "5000k",
-                "-x264-params", "scenecut=0:open_gop=0:min-keyint=60",
-                "-sc_threshold", "0",
-                "-bf", "0",
-                "-fps_mode", "cfr",
-            ]
-            .as_slice(),
-        )
-    } else {
-        (
-            "libx264",
-            [
-                "-preset", "ultrafast",  // Prioritize real-time over quality to avoid choppiness
-                "-tune", "zerolatency",
-                "-pix_fmt", "yuv420p",
-                "-b:v", "2500k",
-                "-maxrate", "2500k",
-                "-bufsize", "5000k",
-                "-x264-params", "scenecut=0:open_gop=0:min-keyint=60",
-                "-sc_threshold", "0",
-                "-bf", "0",  // No B-frames for lower latency
-                "-fps_mode", "cfr",
-            ]
-            .as_slice(),
-        )
-    };
+    let encoder = "libx264";
+    let encoder_extra = [
+        "-preset", "ultrafast",
+        "-tune", "zerolatency",
+        "-pix_fmt", "yuv420p",
+        "-b:v", "2500k",
+        "-maxrate", "2500k",
+        "-bufsize", "5000k",
+        "-x264-params", "scenecut=0:open_gop=0:min-keyint=60",
+        "-sc_threshold", "0",
+        "-bf", "0",
+        "-fps_mode", "cfr",
+    ];
     tracing::info!(overlay_path = %overlay_path_str, encoder = %encoder, "RTMP: ffmpeg PNG overlay");
 
     // Read directly from RTSP. UDP often performs better than TCP for live cameras.
@@ -307,7 +277,7 @@ pub fn spawn_rtmp_pipeline(
         &overlay_path_str,
         &filter,
         encoder,
-        encoder_extra,
+        &encoder_extra,
         &output_url,
     );
 
