@@ -36,3 +36,18 @@ jobs:
       - name: Build .deb package
         run: cargo deb
         working-directory: ./api
+
+      # Deploy
+      - name: Upload .deb to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACKAGE_FILE=$(ls target/debian/*.deb)
+          echo "Uploading $PACKAGE_FILE"
+          curl -u ${{ github.actor }}:$GITHUB_TOKEN \
+            --upload-file "$PACKAGE_FILE" \
+            "https://apt.pkg.github.com/${{ github.repository_owner }}/${{ github.repository }}/"
+
+
+      - name: Verify package
+        run: ls -l target/debian/
