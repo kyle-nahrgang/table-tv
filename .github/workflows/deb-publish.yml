@@ -50,7 +50,3 @@ jobs:
             git add repo
             git commit -m "Publish Debian repo"
             git push -f origin gh-pages
-
-
-      - name: Verify package
-        run: ls -l target/debian/
