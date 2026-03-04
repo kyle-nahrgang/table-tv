@@ -137,64 +137,67 @@ export function canShareVideo() {
  * @param {string} filename - Suggested filename for download
  * @returns {Promise<void>}
  */
-export async function downloadGameRecording(cameraId, startMs, durationSec, filename = 'game.mp4') {
-  const url = `/api/cameras/${encodeURIComponent(cameraId)}/recordings/download?start=${startMs}&duration=${durationSec}`
-  const res = await fetchWithAuth(url)
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || 'Failed to download recording')
-  }
-  const blob = await res.blob()
-  const blobUrl = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = blobUrl
-  a.download = filename
-  a.click()
-  // Delay revoke: mobile Safari may need the URL to stay valid briefly
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 500)
-}
-
 /**
- * Fetch recording as a File for sharing. Call this first, then call shareFile()
- * in direct response to a user tap. Safari requires share() to be triggered
- * by a user gesture; calling it after async fetch loses the gesture.
+ * Downloads a game recording with progress tracking
  * @param {string} cameraId
- * @param {number} startMs - Start time in milliseconds
- * @param {number} durationSec - Duration in seconds
- * @param {string} filename - Suggested filename for the shared file
- * @returns {Promise<File>}
+ * @param {number} startMs
+ * @param {number} durationSec
+ * @param {string} filename
+ * @param {(progress: number) => void} [onProgress] - Callback with download percentage (0-100)
+ * @param {boolean} [autoDownload=true] - if false, don't trigger browser download and just return the File
  */
-export async function fetchGameRecordingForShare(cameraId, startMs, durationSec, filename = 'game.mp4') {
+export async function downloadGameRecording(cameraId, startMs, durationSec, filename = 'game.mp4', onProgress, autoDownload = true) {
   const url = `/api/cameras/${encodeURIComponent(cameraId)}/recordings/download?start=${startMs}&duration=${durationSec}`
   const res = await fetchWithAuth(url)
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Failed to download recording')
   }
-  const arrayBuffer = await res.arrayBuffer()
-  const blob = new Blob([arrayBuffer], { type: 'video/mp4' })
-  return new File([blob], filename, { type: 'video/mp4' })
-}
-
-/**
- * Share a File via the native share sheet. Must be called in direct response
- * to a user tap (e.g. button click) — Safari rejects share() after async ops.
- * @param {File} file - From fetchGameRecordingForShare()
- * @returns {Promise<void>}
- */
-export async function shareFile(file) {
-  if (!navigator.canShare({ files: [file] })) {
-    throw new Error('Sharing this file is not supported on this device')
-  }
+  
+  // Get total size from content-length header
+  const contentLength = res.headers.get('content-length')
+  const total = parseInt(contentLength, 10) || 0
+  
+  // Read the response body in chunks to track progress
+  const reader = res.body.getReader()
+  const chunks = []
+  let loaded = 0
+  
   try {
-    await navigator.share({ files: [file] })
-  } catch (err) {
-    const msg = err?.message?.toLowerCase?.() || ''
-    if (msg.includes('too large') || msg.includes('size')) {
-      throw new Error('Video may be too large. Try a shorter clip.')
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      loaded += value.length
+      
+      // Report progress percentage
+      if (total > 0 && onProgress) {
+        const progress = Math.round((loaded / total) * 100)
+        onProgress(progress)
+      }
     }
-    throw err
+  } finally {
+    reader.cancel()
   }
+  
+  // Create blob from chunks
+  const blob = new Blob(chunks, { type: 'video/mp4' })
+  const file = new File([blob], filename, { type: 'video/mp4' })
+
+
+  // trigger download if requested
+  if (autoDownload) {
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    a.click()
+    // Delay revoke: mobile Safari may need the URL to stay valid briefly
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 500)
+  }
+
+  // return file for potential sharing
+  return file
 }
 
 /**
