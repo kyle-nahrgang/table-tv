@@ -355,6 +355,53 @@ impl Db {
             .ok_or(ApiError::PoolMatchNotFound)
     }
 
+    /// Update match details (names, ratings, race_to, description). Preserves games_won and score_history.
+    pub fn update_pool_match_details(
+        &self,
+        id: &str,
+        player_one: &MatchPlayer,
+        player_two: &MatchPlayer,
+        description: Option<&str>,
+    ) -> Result<PoolMatchDoc, ApiError> {
+        let doc = self
+            .find_pool_match_by_id(id)?
+            .ok_or(ApiError::PoolMatchNotFound)?;
+        if doc.end_time.is_some() {
+            return Err(ApiError::BadRequest(
+                "Cannot update an ended match".to_string(),
+            ));
+        }
+        let player_one_json =
+            serde_json::to_string(player_one).map_err(|e| ApiError::Unknown(e.to_string()))?;
+        let player_two_json =
+            serde_json::to_string(player_two).map_err(|e| ApiError::Unknown(e.to_string()))?;
+        let description_opt = description.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        });
+        self.execute(|conn| {
+            let changed = conn.execute(
+                "UPDATE pool_matches SET player_one = ?1, player_two = ?2, description = ?3 WHERE id = ?4",
+                rusqlite::params![
+                    player_one_json,
+                    player_two_json,
+                    description_opt,
+                    id,
+                ],
+            )?;
+            if changed == 0 {
+                return Err(ApiError::PoolMatchNotFound);
+            }
+            Ok(())
+        })?;
+        self.find_pool_match_by_id(id)?
+            .ok_or(ApiError::PoolMatchNotFound)
+    }
+
     /// End a pool match early by setting end_time. No-op if already ended.
     pub fn end_pool_match(&self, id: &str) -> Result<PoolMatchDoc, ApiError> {
         let doc = self

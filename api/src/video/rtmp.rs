@@ -142,25 +142,25 @@ fn escape_drawtext(s: &str) -> String {
         .replace('\'', "'\\''")
 }
 
-/// Build filter_complex: overlay below video (vstack) + drawtext.
-/// Overlay PNG is placed BELOW the video, increasing output height by 100px.
-/// Input 0: RTSP (video+audio), Input 1: anullsrc, Input 2: overlay.
-fn build_filter_complex(location_name: &str, camera_name: &str) -> String {
-    build_filter_complex_with_overlay_input(location_name, camera_name, 2)
+/// Escape file path for ffmpeg filter (handles ', \, :).
+fn escape_filter_path(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace(':', "\\:")
+        .replace('\'', "'\\''")
 }
 
-/// Build filter_complex for preview pipeline. Overlay is input 1 (RTSP=0, overlay=1).
-pub(crate) fn build_filter_complex_for_preview(location_name: &str, camera_name: &str) -> String {
-    build_filter_complex_with_overlay_input(location_name, camera_name, 1)
-}
-
-fn build_filter_complex_with_overlay_input(
+/// Build filter_complex: drawtext for each overlay piece (location, camera, time, 7 match bar pieces).
+/// Each piece from its own textfile with reload=1.
+/// Input 0: RTSP (video+audio), Input 1: anullsrc.
+fn build_filter_complex(
     location_name: &str,
     camera_name: &str,
-    overlay_input: u32,
+    paths: &crate::video::overlay::OverlayPaths,
 ) -> String {
     let font = "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
     let base = "fontsize=20:fontcolor=white";
+    let name_font = "fontsize=28:fontcolor=white";
+    let score_font = "fontsize=56:fontcolor=white";
     let mut parts: Vec<String> = vec![];
     if !location_name.is_empty() {
         parts.push(format!(
@@ -180,18 +180,47 @@ fn build_filter_complex_with_overlay_input(
         base, font
     ));
     let drawtext = parts.join(",");
-    let overlay_label = format!("[{}:v]", overlay_input);
+    // Bar at bottom: y 540-640, center 590. Names/ratings vertically centered in bar.
+    let dt = |path: &str, x: &str, y: &str, font_opt: &str| {
+        format!(
+            "drawtext=textfile='{}':reload=1:x={}:y={}:{}:{}",
+            escape_filter_path(path), x, y, font_opt, font
+        )
+    };
+    let match_parts = [
+        dt(&paths.p1name, "10", "590-text_h/2-18", name_font),
+        dt(&paths.p1rating, "10", "590-text_h/2+18", base),
+        dt(&paths.p2name, "w-text_w-10", "590-text_h/2-18", name_font),
+        dt(&paths.p2rating, "w-text_w-10", "590-text_h/2+18", base),
+        // Center "race to" block vertically in bar (590): two lines ~28px each + 4px gap
+        dt(&paths.raceto, "(w-text_w)/2", "562", name_font),
+        dt(&paths.raceto2, "(w-text_w)/2", "594", name_font),
+        // Scores equidistant from center (80px each side), score1 right-aligned
+        dt(&paths.score1, "(w/2)-80-text_w", "590-text_h/2", score_font),
+        dt(&paths.score2, "(w/2)+80", "590-text_h/2", score_font),
+    ];
+    let match_bar = format!(
+        "pad=960:640:0:0:black,{}",
+        match_parts.join(",")
+    );
     format!(
-        "[0:v]fps=30:round=near,scale=960:540,{},format=yuv420p[main];{}loop=-1:1:0,scale=960:100,format=yuv420p[overlay];[main][overlay]vstack=inputs=2,format=yuv420p[out]",
-        drawtext, overlay_label
+        "[0:v]fps=30:round=near,scale=960:540,{},{},format=yuv420p[out]",
+        drawtext, match_bar
     )
 }
 
-/// Shared FFmpeg args for RTMP output. Input 0: RTSP (video+audio), Input 1: anullsrc, Input 2: overlay.
-/// Stream selection: -map 0:a uses RTSP audio; anullsrc is fallback when RTSP has no audio.
+/// Build filter_complex for preview pipeline.
+pub(crate) fn build_filter_complex_for_preview(
+    location_name: &str,
+    camera_name: &str,
+    paths: &crate::video::overlay::OverlayPaths,
+) -> String {
+    build_filter_complex(location_name, camera_name, paths)
+}
+
+/// Shared FFmpeg args for RTMP output. Input 0: RTSP (video+audio), Input 1: anullsrc.
 fn build_rtmp_args(
     video_input: &[impl AsRef<str>],
-    overlay_path: &str,
     filter_complex: &str,
     encoder: &str,
     encoder_extra: &[&str],
@@ -202,10 +231,6 @@ fn build_rtmp_args(
     args.extend([
         "-f".into(), "lavfi".into(),
         "-i".into(), "anullsrc=channel_layout=stereo:sample_rate=48000".into(),
-        "-f".into(), "image2".into(),
-        "-loop".into(), "1".into(),
-        "-r".into(), "30".into(),  // Match video fps so vstack gets continuous overlay frames
-        "-i".into(), overlay_path.to_string(),
         "-filter_complex".into(), filter_complex.to_string(),
         "-map".into(), "[out]".into(),
         "-map".into(), "0:a".into(),  // RTSP audio (camera mic); anullsrc fallback when absent
@@ -261,18 +286,18 @@ fn maybe_rewrite_rtmps_for_stunnel(url: &str) -> String {
 }
 
 /// Spawn RTMP pipeline. Reads directly from RTSP URL and pushes to RTMP.
-/// Draws location (top left), camera name (underneath), and time (top right).
+/// Draws location (top left), camera name (underneath), time (top right), and overlay (PNG + score .txt files).
 pub fn spawn_rtmp_pipeline(
     rtsp_url: &str,
     rtmp_url: &str,
     stop_rx: std::sync::mpsc::Receiver<()>,
     rtmp: RtmpState,
     id: String,
-    overlay_path: &std::path::Path,
+    _overlay_path: &std::path::Path,
     location_name: &str,
     camera_name: &str,
 ) -> Result<(), String> {
-    let overlay_path_str = resolve_overlay_path(overlay_path)?;
+    let paths = crate::video::overlay::resolve_overlay_paths_for_camera(camera_name)?;
 
     let encoder = "libx264";
     let encoder_extra = [
@@ -287,17 +312,16 @@ pub fn spawn_rtmp_pipeline(
         "-bf", "0",
         "-fps_mode", "cfr",
     ];
-    tracing::info!(overlay_path = %overlay_path_str, encoder = %encoder, "RTMP: ffmpeg PNG overlay");
+    tracing::info!(encoder = %encoder, "RTMP: ffmpeg drawtext overlay");
 
     let video_input = rtsp_input_args(rtsp_url);
-    let filter = build_filter_complex(location_name, camera_name);
+    let filter = build_filter_complex(location_name, camera_name, &paths);
     let output_url = maybe_rewrite_rtmps_for_stunnel(rtmp_url);
     if output_url != rtmp_url {
         tracing::info!("RTMP: using stunnel relay (use_stunnel_for_rtmps=true)");
     }
     let args = build_rtmp_args(
         &video_input,
-        &overlay_path_str,
         &filter,
         encoder,
         &encoder_extra,

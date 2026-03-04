@@ -103,10 +103,13 @@ pub struct PoolMatchResponse {
     /// "standard" (two players) or "practice" (single player, racks count).
     #[serde(default)]
     pub match_type: String,
+    /// True if the current user can edit match details (names, ratings, description).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub can_edit: Option<bool>,
 }
 
 impl PoolMatchResponse {
-    fn from_doc(doc: PoolMatchDoc, camera_name: String) -> Option<Self> {
+    fn from_doc(doc: PoolMatchDoc, camera_name: String, can_edit: Option<bool>) -> Option<Self> {
         let id = doc.id?;
         let camera_id = doc.camera_id.as_ref().cloned().unwrap_or_default();
         let score_history = doc
@@ -134,6 +137,7 @@ impl PoolMatchResponse {
             description: doc.description,
             score_history,
             match_type: match_type.to_string(),
+            can_edit,
         })
     }
 }
@@ -165,13 +169,27 @@ pub struct PoolMatchUpdateScoreRequest {
 }
 
 #[derive(Deserialize)]
+pub struct MatchPlayerUpdateDto {
+    pub name: Option<String>,
+    pub race_to: Option<u8>,
+    pub rating: Option<RatingDto>,
+}
+
+#[derive(Deserialize)]
+pub struct PoolMatchUpdateDetailsRequest {
+    pub player_one: Option<MatchPlayerUpdateDto>,
+    pub player_two: Option<MatchPlayerUpdateDto>,
+    pub description: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct ActiveMatchQuery {
     pub camera_id: String,
 }
 
 /// GET /api/pool-matches/active?camera_id=X - Get the active (ongoing) match for a camera.
 pub async fn pool_matches_active(
-    _auth: AuthenticatedUser,
+    auth: AuthenticatedUser,
     State(app): State<AppState>,
     Query(q): Query<ActiveMatchQuery>,
 ) -> Result<Json<Option<PoolMatchResponse>>, ApiError> {
@@ -186,7 +204,12 @@ pub async fn pool_matches_active(
             .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
             .map(|c| c.name)
             .unwrap_or_default();
-        PoolMatchResponse::from_doc(doc, camera_name)
+        let can_edit = doc
+            .started_by_sub
+            .as_ref()
+            .map(|sub| sub == &auth.sub)
+            .unwrap_or(false);
+        PoolMatchResponse::from_doc(doc, camera_name, Some(can_edit))
     });
     Ok(Json(resp))
 }
@@ -205,7 +228,7 @@ pub async fn pool_matches_list(
                 .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
                 .map(|c| c.name)
                 .unwrap_or_default();
-            PoolMatchResponse::from_doc(doc, camera_name)
+            PoolMatchResponse::from_doc(doc, camera_name, None)
         })
         .collect();
     Ok(Json(responses))
@@ -213,7 +236,7 @@ pub async fn pool_matches_list(
 
 /// GET /api/pool-matches/:id - Get a pool match by id.
 pub async fn pool_matches_get(
-    _auth: AuthenticatedUser,
+    auth: AuthenticatedUser,
     State(app): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PoolMatchResponse>, ApiError> {
@@ -230,7 +253,12 @@ pub async fn pool_matches_get(
         .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
         .map(|c| c.name)
         .unwrap_or_default();
-    PoolMatchResponse::from_doc(m, camera_name)
+    let can_edit = m
+        .started_by_sub
+        .as_ref()
+        .map(|sub| sub == &auth.sub)
+        .unwrap_or(false);
+    PoolMatchResponse::from_doc(m, camera_name, Some(can_edit))
         .ok_or(ApiError::PoolMatchNotFound)
         .map(Json)
 }
@@ -403,7 +431,102 @@ pub async fn pool_matches_update_score(
         .map(|c| c.name)
         .unwrap_or_default();
     tracing::debug!(match_id = %id, "update score: building response");
-    PoolMatchResponse::from_doc(updated, camera_name)
+    PoolMatchResponse::from_doc(updated, camera_name, Some(true))
+        .ok_or(ApiError::PoolMatchNotFound)
+        .map(Json)
+}
+
+/// PATCH /api/pool-matches/:id/details - Update names, ratings, description. Creator only.
+pub async fn pool_matches_update_details(
+    auth: AuthenticatedUser,
+    State(app): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<PoolMatchUpdateDetailsRequest>,
+) -> Result<Json<PoolMatchResponse>, ApiError> {
+    if !valid_id(&id) {
+        return Err(ApiError::BadRequest("Invalid pool match id".to_string()));
+    }
+    let doc = app
+        .db
+        .find_pool_match_by_id(&id)?
+        .ok_or(ApiError::PoolMatchNotFound)?;
+    if doc.end_time.is_some() {
+        return Err(ApiError::BadRequest(
+            "Cannot update an ended match".to_string(),
+        ));
+    }
+    let can_update = doc
+        .started_by_sub
+        .as_ref()
+        .map(|sub| sub == &auth.sub)
+        .unwrap_or(false);
+    if !can_update {
+        return Err(ApiError::Forbidden(
+            "Only the person who started the match can update details".to_string(),
+        ));
+    }
+
+    let mut player_one = doc.player_one.clone();
+    if let Some(ref p) = req.player_one {
+        if let Some(ref name) = p.name {
+            let t = name.trim();
+            if !t.is_empty() {
+                player_one.name = t.to_string();
+            }
+        }
+        if let Some(rt) = p.race_to {
+            player_one.race_to = rt;
+        }
+        if let Some(ref r) = p.rating {
+            player_one.rating = Some(r.clone().try_into()?);
+        }
+    }
+
+    let mut player_two = doc.player_two.clone();
+    if let Some(ref p) = req.player_two {
+        if let Some(ref name) = p.name {
+            let t = name.trim();
+            if !t.is_empty() {
+                player_two.name = t.to_string();
+            }
+        }
+        if let Some(rt) = p.race_to {
+            player_two.race_to = rt;
+        }
+        if let Some(ref r) = p.rating {
+            player_two.rating = Some(r.clone().try_into()?);
+        }
+    }
+
+    let description = req.description.as_deref();
+    let updated = app.db.update_pool_match_details(
+        &id,
+        &player_one,
+        &player_two,
+        description,
+    )?;
+
+    if let Some(ref cid) = updated.camera_id {
+        video::update_overlay(
+            &app.db,
+            &app.overlay,
+            cid,
+            &app.rtmp_processes,
+            Some(video::MatchOverlay {
+                player_one: video::OverlayPlayer::from_match_player(&updated.player_one),
+                player_two: video::OverlayPlayer::from_match_player(&updated.player_two),
+                is_practice: updated.match_type == MatchType::Practice,
+            }),
+        );
+    }
+
+    let camera_name = updated
+        .camera_id
+        .as_ref()
+        .and_then(|cid| app.db.find_camera_by_id(cid).ok().flatten())
+        .map(|c| c.name)
+        .unwrap_or_default();
+    PoolMatchResponse::from_doc(updated, camera_name, Some(true))
         .ok_or(ApiError::PoolMatchNotFound)
         .map(Json)
 }
@@ -460,7 +583,7 @@ pub async fn pool_matches_end(
         .map(|c| c.name)
         .unwrap_or_default();
     tracing::debug!(match_id = %id, "end match: building response");
-    PoolMatchResponse::from_doc(updated, camera_name)
+    PoolMatchResponse::from_doc(updated, camera_name, Some(true))
         .ok_or(ApiError::PoolMatchNotFound)
         .map(Json)
 }
@@ -500,6 +623,10 @@ pub fn routes() -> axum::Router<AppState> {
         .route(
             "/api/pool-matches/:id/score",
             patch(pool_matches_update_score),
+        )
+        .route(
+            "/api/pool-matches/:id/details",
+            patch(pool_matches_update_details),
         )
         .route("/api/pool-matches/:id/end", patch(pool_matches_end))
 }

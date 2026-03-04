@@ -223,7 +223,9 @@ export function StreamPreview({
                         race to
                       </Typography>
                       <Typography variant="body2" color="rgba(255,255,255,0.85)" sx={{ fontSize: '0.9rem' }}>
-                        {match.player_one.race_to}/{match.player_two.race_to}
+                        {match.player_one.race_to === match.player_two.race_to
+                          ? match.player_one.race_to
+                          : `${match.player_one.race_to}/${match.player_two.race_to}`}
                       </Typography>
                     </Box>
                     <Box

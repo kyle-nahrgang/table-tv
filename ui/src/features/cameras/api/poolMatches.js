@@ -31,6 +31,7 @@ import { fetchWithAuth } from '../../../apiClient.js'
  * @property {string} [description] - Match description (supports newlines), used in live video post
  * @property {ScoreHistoryEntry[]} [score_history] - History of score adjustments with timestamps
  * @property {'standard'|'practice'} [match_type] - "standard" (two players) or "practice" (single player, racks count)
+ * @property {boolean} [can_edit] - True if current user can edit match details (names, ratings, description)
  */
 
 /**
@@ -198,6 +199,25 @@ export async function downloadGameRecording(cameraId, startMs, durationSec, file
 
   // return file for potential sharing
   return file
+}
+
+/**
+ * Update match details (names, ratings, description). Creator only.
+ * @param {string} matchId
+ * @param {{ player_one?: { name?: string, race_to?: number, rating?: { type: string, value: number } }, player_two?: { name?: string, race_to?: number, rating?: { type: string, value: number } }, description?: string }} payload
+ * @returns {Promise<PoolMatch>}
+ */
+export async function updateMatchDetails(matchId, payload) {
+  const res = await fetchWithAuth(`/api/pool-matches/${matchId}/details`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Failed to update match details')
+  }
+  return res.json()
 }
 
 /**

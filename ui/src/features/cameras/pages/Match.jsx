@@ -20,12 +20,13 @@ import {
   MenuItem,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import EditIcon from '@mui/icons-material/Edit'
 import HistoryIcon from '@mui/icons-material/History'
 import StopIcon from '@mui/icons-material/Stop'
 import LiveTvIcon from '@mui/icons-material/LiveTv'
 import VideocamIcon from '@mui/icons-material/Videocam'
 import { getCamera, getFacebookLiveUrl, getFacebookStatus, getRtmpStreamStatus, startRtmpStream, stopRtmpStream } from '../api/cameras.js'
-import { getMatch, updateScore, endMatch } from '../api/poolMatches.js'
+import { getMatch, updateScore, endMatch, updateMatchDetails } from '../api/poolMatches.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
 import { getToken, urlWithToken } from '../../../apiClient.js'
 import { MatchDuration } from '../../../components/MatchDuration.jsx'
@@ -62,6 +63,10 @@ export function Match() {
   const [previewLoaded, setPreviewLoaded] = useState(false)
   const [downloadingGame, setDownloadingGame] = useState(null)
   const [downloadError, setDownloadError] = useState('')
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [editForm, setEditForm] = useState({})
 
   useEffect(() => {
     if (!id) return
@@ -283,6 +288,54 @@ export function Match() {
     }
   }
 
+  const openEditDialog = () => {
+    setEditForm({
+      name1: match.player_one.name,
+      rating1Type: match.player_one.rating?.type || 'Apa',
+      rating1Value: match.player_one.rating?.value ?? '',
+      raceTo1: match.player_one.race_to,
+      name2: match.player_two.name,
+      rating2Type: match.player_two.rating?.type || 'Apa',
+      rating2Value: match.player_two.rating?.value ?? '',
+      raceTo2: match.player_two.race_to,
+      description: match.description || '',
+    })
+    setEditError('')
+    setEditDialogOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!match || editSaving) return
+    setEditSaving(true)
+    setEditError('')
+    try {
+      const payload = {
+        player_one: {
+          name: editForm.name1?.trim() || undefined,
+          race_to: editForm.raceTo1,
+          rating: editForm.rating1Value !== '' && editForm.rating1Value !== undefined
+            ? { type: editForm.rating1Type, value: Number(editForm.rating1Value) }
+            : undefined,
+        },
+        player_two: match.match_type === 'standard' ? {
+          name: editForm.name2?.trim() || undefined,
+          race_to: editForm.raceTo2,
+          rating: editForm.rating2Value !== '' && editForm.rating2Value !== undefined
+            ? { type: editForm.rating2Type, value: Number(editForm.rating2Value) }
+            : undefined,
+        } : undefined,
+        description: editForm.description?.trim() || undefined,
+      }
+      const updated = await updateMatchDetails(match.id, payload)
+      setMatch(updated)
+      setEditDialogOpen(false)
+    } catch (err) {
+      setEditError(err.message || 'Failed to update')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   useEffect(() => {
     if (!match) return
     const matchTitle = formatMatchTitle(match)
@@ -330,7 +383,7 @@ export function Match() {
         </Alert>
       )}
       <Paper sx={{ p: 3 }}>
-        <Box display="flex" alignItems="center" gap={2} sx={{ mb: 2 }}>
+        <Box display="flex" alignItems="center" gap={2} sx={{ mb: 2, flexWrap: 'wrap' }}>
           <Typography variant="h4" component="h1">
             {formatMatchTitle(match)}
           </Typography>
@@ -338,6 +391,16 @@ export function Match() {
             {score}
           </Typography>
           {isActive && <Chip label="In progress" color="primary" size="small" />}
+          {match.can_edit && isActive && (
+            <Button
+              startIcon={<EditIcon />}
+              variant="outlined"
+              size="small"
+              onClick={openEditDialog}
+            >
+              Edit details
+            </Button>
+          )}
           {match.end_time && (() => {
             const endedLabel = formatMatchWinner(match)
             return endedLabel ? (
@@ -460,6 +523,118 @@ export function Match() {
           </Box>
         )}
       </Paper>
+
+      <Dialog open={editDialogOpen} onClose={() => !editSaving && setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit match details</DialogTitle>
+        <DialogContent>
+          {editError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setEditError('')}>
+              {editError}
+            </Alert>
+          )}
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="subtitle2" color="text.secondary">Player 1</Typography>
+            <TextField
+              label="Name"
+              value={editForm.name1 || ''}
+              onChange={(e) => setEditForm((f) => ({ ...f, name1: e.target.value }))}
+              fullWidth
+              size="small"
+            />
+            <Box display="flex" gap={1}>
+              <FormControl size="small" sx={{ minWidth: 100 }}>
+                <InputLabel>Rating type</InputLabel>
+                <Select
+                  value={editForm.rating1Type || 'Apa'}
+                  label="Rating type"
+                  onChange={(e) => setEditForm((f) => ({ ...f, rating1Type: e.target.value }))}
+                >
+                  <MenuItem value="Apa">APA</MenuItem>
+                  <MenuItem value="Fargo">Fargo</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                label="Rating"
+                type="number"
+                value={editForm.rating1Value ?? ''}
+                onChange={(e) => setEditForm((f) => ({ ...f, rating1Value: e.target.value }))}
+                size="small"
+                sx={{ width: 100 }}
+                inputProps={{ min: 0 }}
+              />
+            </Box>
+            <TextField
+              label="Race to"
+              type="number"
+              value={editForm.raceTo1 ?? ''}
+              onChange={(e) => setEditForm((f) => ({ ...f, raceTo1: Number(e.target.value) || 0 }))}
+              size="small"
+              sx={{ width: 100 }}
+              inputProps={{ min: 0, max: 21 }}
+            />
+            {match.match_type === 'standard' && (
+              <>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Player 2</Typography>
+                <TextField
+                  label="Name"
+                  value={editForm.name2 || ''}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name2: e.target.value }))}
+                  fullWidth
+                  size="small"
+                />
+                <Box display="flex" gap={1}>
+                  <FormControl size="small" sx={{ minWidth: 100 }}>
+                    <InputLabel>Rating type</InputLabel>
+                    <Select
+                      value={editForm.rating2Type || 'Apa'}
+                      label="Rating type"
+                      onChange={(e) => setEditForm((f) => ({ ...f, rating2Type: e.target.value }))}
+                    >
+                      <MenuItem value="Apa">APA</MenuItem>
+                      <MenuItem value="Fargo">Fargo</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    label="Rating"
+                    type="number"
+                    value={editForm.rating2Value ?? ''}
+                    onChange={(e) => setEditForm((f) => ({ ...f, rating2Value: e.target.value }))}
+                    size="small"
+                    sx={{ width: 100 }}
+                    inputProps={{ min: 0 }}
+                  />
+                </Box>
+                <TextField
+                  label="Race to"
+                  type="number"
+                  value={editForm.raceTo2 ?? ''}
+                  onChange={(e) => setEditForm((f) => ({ ...f, raceTo2: Number(e.target.value) || 0 }))}
+                  size="small"
+                  sx={{ width: 100 }}
+                  inputProps={{ min: 0, max: 21 }}
+                />
+              </>
+            )}
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>Description</Typography>
+            <TextField
+              label="Description"
+              value={editForm.description || ''}
+              onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+              fullWidth
+              multiline
+              rows={3}
+              size="small"
+              placeholder="Optional description (supports newlines)"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)} disabled={editSaving}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveEdit} disabled={editSaving}>
+            {editSaving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={rtmpDialogOpen} onClose={() => setRtmpDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Go Live</DialogTitle>

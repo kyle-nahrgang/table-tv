@@ -10,8 +10,9 @@ pub(crate) mod rtsp_camera;
 pub(crate) mod rtmp;
 
 pub use overlay::{
-    clear_overlay, overlay_path_for_camera, restore_overlay_from_db, spawn_overlay_refresh_task,
-    update_overlay, MatchOverlay, OverlayPlayer, OverlayState,
+    clear_overlay, overlay_path_for_camera, overlay_path_for_camera_piece,
+    resolve_overlay_paths_for_camera, restore_overlay_from_db, spawn_overlay_refresh_task,
+    update_overlay, MatchOverlay, OverlayPaths, OverlayPlayer, OverlayState,
 };
 pub use mediamtx::{
     delete_camera_path, fetch_camera_connection_status, finish_recording_segment, is_available,

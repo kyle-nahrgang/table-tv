@@ -19,30 +19,26 @@ impl CameraSource for RtspCameraState {
     }
 }
 
-/// Spawn FFmpeg to read from RTSP, apply overlay (same as RTMP pipeline), output MJPEG to stdout.
+/// Spawn FFmpeg to read from RTSP, apply overlay (drawtext only), output MJPEG to stdout.
 fn spawn_rtsp_ffmpeg_with_overlay(
     rtsp_url: &str,
-    overlay_path: &Path,
+    _overlay_path: &Path,
     location_name: &str,
     camera_name: &str,
 ) -> Option<(Child, broadcast::Sender<bytes::Bytes>)> {
-    let overlay_path_str = match rtmp::resolve_overlay_path(overlay_path) {
+    let paths = match crate::video::overlay::resolve_overlay_paths_for_camera(camera_name) {
         Ok(p) => p,
         Err(e) => {
-            tracing::warn!(path = ?overlay_path, "Overlay path resolution failed: {}", e);
+            tracing::warn!(camera_name = %camera_name, "Overlay path resolution failed: {}", e);
             return None;
         }
     };
 
-    let filter = rtmp::build_filter_complex_for_preview(location_name, camera_name);
+    let filter = rtmp::build_filter_complex_for_preview(location_name, camera_name, &paths);
 
     let mut args: Vec<String> = vec!["-y".into()];
     args.extend(rtmp::rtsp_input_args(rtsp_url));
     args.extend([
-        "-f".into(), "image2".into(),
-        "-loop".into(), "1".into(),
-        "-r".into(), "30".into(),
-        "-i".into(), overlay_path_str,
         "-filter_complex".into(), filter,
         "-map".into(), "[out]".into(),
         "-f".into(), "mjpeg".into(),

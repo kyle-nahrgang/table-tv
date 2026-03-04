@@ -1,21 +1,24 @@
-//! Match overlay rendering and PNG export for RTMP streams.
-//! PNG contains only the match bar (player names, score). No location or timestamp.
+//! Match overlay: separate text files per piece. FFmpeg drawtext with textfile+reload for each.
 
-use ab_glyph::FontRef;
-use image::{Rgba, RgbaImage};
-use imageproc::drawing::{draw_filled_circle_mut, draw_filled_rect_mut, draw_text_mut};
-use imageproc::rect::Rect;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use crate::db::pool_match::{MatchPlayer, MatchType, Rating};
 use crate::db::Db;
 use crate::video::rtmp;
 
-/// Overlay PNG directory.
-const OVERLAY_PNG_DIR: &str = "data";
+/// Overlay directory.
+const OVERLAY_DIR: &str = "data";
 
-const OVERLAY_WIDTH: u32 = 1280;
-const OVERLAY_HEIGHT: u32 = 100;
+/// Overlay piece identifiers.
+pub const OVERLAY_P1_NAME: &str = "p1name";
+pub const OVERLAY_P1_RATING: &str = "p1rating";
+pub const OVERLAY_P2_NAME: &str = "p2name";
+pub const OVERLAY_P2_RATING: &str = "p2rating";
+pub const OVERLAY_RACE_TO: &str = "raceto";
+pub const OVERLAY_RACE_TO2: &str = "raceto2";
+pub const OVERLAY_SCORE1: &str = "score1";
+pub const OVERLAY_SCORE2: &str = "score2";
 
 fn overlay_name_for_camera(camera_name: &str) -> String {
     let sanitized: String = camera_name
@@ -35,11 +38,44 @@ fn overlay_name_for_camera(camera_name: &str) -> String {
     }
 }
 
-/// Overlay path for a camera. Sanitizes camera name for use in filename.
-pub fn overlay_path_for_camera(camera_name: &str) -> std::path::PathBuf {
+/// Overlay text file path for a camera piece.
+pub fn overlay_path_for_camera_piece(camera_name: &str, piece: &str) -> PathBuf {
     let name = overlay_name_for_camera(camera_name);
-    std::path::Path::new(OVERLAY_PNG_DIR).join(format!("rtmp-overlay-{}.png", name))
+    std::path::Path::new(OVERLAY_DIR).join(format!("rtmp-overlay-{}-{}.txt", name, piece))
 }
+
+/// Overlay path for a camera (returns p1name path; used by stream API).
+pub fn overlay_path_for_camera(camera_name: &str) -> PathBuf {
+    overlay_path_for_camera_piece(camera_name, OVERLAY_P1_NAME)
+}
+
+/// Resolved overlay paths for FFmpeg. All paths must exist before use.
+#[derive(Clone)]
+pub struct OverlayPaths {
+    pub p1name: String,
+    pub p1rating: String,
+    pub p2name: String,
+    pub p2rating: String,
+    pub raceto: String,
+    pub raceto2: String,
+    pub score1: String,
+    pub score2: String,
+}
+
+/// Resolve all overlay paths for a camera. Fails if any file does not exist.
+pub fn resolve_overlay_paths_for_camera(camera_name: &str) -> Result<OverlayPaths, String> {
+    Ok(OverlayPaths {
+        p1name: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_P1_NAME))?,
+        p1rating: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_P1_RATING))?,
+        p2name: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_P2_NAME))?,
+        p2rating: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_P2_RATING))?,
+        raceto: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_RACE_TO))?,
+        raceto2: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_RACE_TO2))?,
+        score1: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_SCORE1))?,
+        score2: rtmp::resolve_overlay_path(&overlay_path_for_camera_piece(camera_name, OVERLAY_SCORE2))?,
+    })
+}
+
 
 /// Overlay data for an active match. Displayed at bottom of stream.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -75,229 +111,67 @@ impl OverlayPlayer {
 /// Shared overlay state. Updated by pool_match handlers when match changes.
 pub type OverlayState = Arc<RwLock<Option<MatchOverlay>>>;
 
-fn load_font() -> Option<FontRef<'static>> {
-    let font_bytes = include_bytes!("../../assets/fonts/DejaVuSans.ttf");
-    FontRef::try_from_slice(font_bytes).ok()
-}
-
-/// Draw match overlay in the 80px bar.
-fn draw_match_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &FontRef) {
-    if overlay.is_practice {
-        draw_practice_to_rgba(img, overlay, font);
-        return;
+fn write_atomic(path: &std::path::Path, content: &str) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
-    let (w, h) = (img.width() as i32, img.height() as i32);
-    let bar_rect = Rect::at(0, 0).of_size(w as u32, h as u32);
-    draw_filled_rect_mut(img, bar_rect, Rgba([0u8, 0, 0, 230]));
-
-    let scale = 28.0f32;
-    let scale_sm = 18.0f32;
-    let white = Rgba([255u8, 255, 255, 255]);
-    let gray = Rgba([204u8, 204, 204, 255]);
-    let bar_color = Rgba([0u8, 0, 0, 230]);
-    let px = 16i32;
-    let center_y = h / 2;
-    let line_h = 32i32;
-
-    let p1_name_y = center_y - line_h / 2;
-    let p1_rating_y = center_y + line_h / 2;
-
-    draw_text_mut(
-        img,
-        white,
-        px,
-        p1_name_y,
-        ab_glyph::PxScale::from(scale),
-        font,
-        &overlay.player_one.name,
-    );
-    if let Some(ref r) = overlay.player_one.rating {
-        draw_text_mut(
-            img,
-            gray,
-            px,
-            p1_rating_y,
-            ab_glyph::PxScale::from(scale_sm),
-            font,
-            r,
-        );
-    }
-
-    let score_scale = 30.0f32;
-    let s1 = overlay.player_one.games_won.to_string();
-    let s2 = overlay.player_two.games_won.to_string();
-    let race_line2 = format!(
-        "{}/{}",
-        overlay.player_one.race_to, overlay.player_two.race_to
-    );
-
-    let (s1_w, s1_h) =
-        imageproc::drawing::text_size(ab_glyph::PxScale::from(score_scale), font, &s1);
-    let (race2_w, race1_h) =
-        imageproc::drawing::text_size(ab_glyph::PxScale::from(scale_sm), font, &race_line2);
-    let race_line1 = "race to";
-    let (race1_w, _) =
-        imageproc::drawing::text_size(ab_glyph::PxScale::from(scale_sm), font, race_line1);
-    let (s2_w, s2_h) =
-        imageproc::drawing::text_size(ab_glyph::PxScale::from(score_scale), font, &s2);
-
-    let circle_d = 40i32;
-    let circle_r = circle_d / 2;
-    let center_gap = 12i32;
-    let race_w = race1_w.max(race2_w);
-    let total_w = circle_d + center_gap + race_w as i32 + center_gap + circle_d;
-    let center_start = (w - total_w) / 2;
-    let center_end = center_start + total_w;
-
-    let s1_cx = center_start + circle_r;
-    let race_x = center_start + circle_d + center_gap;
-    let s2_cx = center_start + circle_d + center_gap + race_w as i32 + center_gap + circle_r;
-
-    draw_filled_circle_mut(img, (s1_cx, center_y), circle_r, white);
-    draw_filled_circle_mut(img, (s1_cx, center_y), circle_r - 2, bar_color);
-    draw_filled_circle_mut(img, (s2_cx, center_y), circle_r, white);
-    draw_filled_circle_mut(img, (s2_cx, center_y), circle_r - 2, bar_color);
-
-    let score_y = center_y - s1_h as i32 / 2 - 3;
-    let s1_x = s1_cx - s1_w as i32 / 2;
-    let s2_x = s2_cx - s2_w as i32 / 2;
-    draw_text_mut(
-        img,
-        white,
-        s1_x,
-        score_y,
-        ab_glyph::PxScale::from(score_scale),
-        font,
-        &s1,
-    );
-    draw_text_mut(
-        img,
-        white,
-        s2_x,
-        center_y - s2_h as i32 / 2 - 3,
-        ab_glyph::PxScale::from(score_scale),
-        font,
-        &s2,
-    );
-
-    let race_gap = 2i32;
-    let race_block_h = race1_h as i32 + race_gap + race1_h as i32;
-    let race_y1 = center_y - race_block_h / 2;
-    let race_y2 = race_y1 + race1_h as i32 + race_gap;
-    let race_line1_x = race_x + (race_w as i32 - race1_w as i32) / 2;
-    let race_line2_x = race_x + (race_w as i32 - race2_w as i32) / 2;
-    draw_text_mut(
-        img,
-        gray,
-        race_line1_x,
-        race_y1,
-        ab_glyph::PxScale::from(scale_sm),
-        font,
-        race_line1,
-    );
-    draw_text_mut(
-        img,
-        gray,
-        race_line2_x,
-        race_y2,
-        ab_glyph::PxScale::from(scale_sm),
-        font,
-        &race_line2,
-    );
-
-    let (p2_w, _) = imageproc::drawing::text_size(
-        ab_glyph::PxScale::from(scale),
-        font,
-        &overlay.player_two.name,
-    );
-    let p2_x = (w - p2_w as i32 - px).max(center_end + 16);
-    draw_text_mut(
-        img,
-        white,
-        p2_x,
-        p1_name_y,
-        ab_glyph::PxScale::from(scale),
-        font,
-        &overlay.player_two.name,
-    );
-    if let Some(ref r) = overlay.player_two.rating {
-        draw_text_mut(
-            img,
-            gray,
-            p2_x,
-            p1_rating_y,
-            ab_glyph::PxScale::from(scale_sm),
-            font,
-            r,
-        );
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, content).is_ok() {
+        let _ = std::fs::rename(&tmp, path);
     }
 }
 
-/// Draw practice overlay: "Practice: Name | Rack #N"
-fn draw_practice_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &FontRef) {
-    let (w, h) = (img.width() as i32, img.height() as i32);
-    let bar_rect = Rect::at(0, 0).of_size(w as u32, h as u32);
-    draw_filled_rect_mut(img, bar_rect, Rgba([0u8, 0, 0, 230]));
-
-    let scale = 28.0f32;
-    let white = Rgba([255u8, 255, 255, 255]);
-    let px = 16i32;
-    let center_y = h / 2;
-    let line_h = 32i32;
-
-    let left_text = format!("Practice: {}", overlay.player_one.name);
-    let right_text = format!("Rack #{}", overlay.player_one.games_won + 1);
-    draw_text_mut(
-        img,
-        white,
-        px,
-        center_y - line_h / 2,
-        ab_glyph::PxScale::from(scale),
-        font,
-        &left_text,
-    );
-    let (right_w, _) =
-        imageproc::drawing::text_size(ab_glyph::PxScale::from(scale), font, &right_text);
-    draw_text_mut(
-        img,
-        white,
-        (w - right_w as i32 - px).max(px),
-        center_y - line_h / 2,
-        ab_glyph::PxScale::from(scale),
-        font,
-        &right_text,
-    );
-}
-
-fn overlay_tmp_path(path: &std::path::Path) -> std::path::PathBuf {
-    path.with_file_name("rtmp-overlay.tmp.png")
-}
-
-/// Render overlay PNG (match bar only) and write to path.
-/// Uses opaque black background (not transparent) so FFmpeg's yuv420p conversion doesn't
-/// produce green artifacts when vstacking with the video.
-/// Writes in-place (same inode) so FFmpeg can see updates when it re-reads the image.
-pub fn render_overlay_png(path: &std::path::Path, overlay: Option<&MatchOverlay>) {
-    if let Some(font) = load_font() {
-        let mut img = RgbaImage::from_pixel(OVERLAY_WIDTH, OVERLAY_HEIGHT, Rgba([0, 0, 0, 255]));
-        if let Some(o) = overlay {
-            draw_match_to_rgba(&mut img, o, &font);
-        }
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        // Write to tmp first, then overwrite target in-place so FFmpeg (same inode) sees updates
-        let tmp = overlay_tmp_path(path);
-        if let Err(e) = img.save(&tmp) {
-            tracing::warn!(path = ?tmp, error = %e, "Failed to save overlay PNG");
-            return;
-        }
-        if let Err(e) = std::fs::copy(&tmp, path) {
-            tracing::warn!(path = ?path, error = %e, "Failed to write overlay PNG");
-        }
-        let _ = std::fs::remove_file(&tmp);
-    } else {
-        tracing::warn!("No font for overlay PNG");
+/// Render overlay pieces to separate text files. FFmpeg drawtext with textfile=path:reload=1 for each.
+pub fn render_overlay_pieces(camera_name: &str, overlay: Option<&MatchOverlay>) {
+    let empty = " ".to_string();
+    let (p1name, p1rating, p2name, p2rating, raceto, raceto2, score1, score2) = match overlay {
+        Some(o) if o.is_practice => (
+            format!("Practice: {}", o.player_one.name),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+            format!("Rack #{}", o.player_one.games_won + 1),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+        ),
+        Some(o) => (
+            o.player_one.name.clone(),
+            o.player_one.rating.clone().unwrap_or_default(),
+            o.player_two.name.clone(),
+            o.player_two.rating.clone().unwrap_or_default(),
+            "race to".to_string(),
+            if o.player_one.race_to == o.player_two.race_to {
+                o.player_one.race_to.to_string()
+            } else {
+                format!("{}-{}", o.player_one.race_to, o.player_two.race_to)
+            },
+            o.player_one.games_won.to_string(),
+            o.player_two.games_won.to_string(),
+        ),
+        None => (
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+            empty.clone(),
+        ),
+    };
+    for (piece, content) in [
+        (OVERLAY_P1_NAME, p1name),
+        (OVERLAY_P1_RATING, p1rating),
+        (OVERLAY_P2_NAME, p2name),
+        (OVERLAY_P2_RATING, p2rating),
+        (OVERLAY_RACE_TO, raceto),
+        (OVERLAY_RACE_TO2, raceto2),
+        (OVERLAY_SCORE1, score1),
+        (OVERLAY_SCORE2, score2),
+    ] {
+        let path = overlay_path_for_camera_piece(camera_name, piece);
+        write_atomic(&path, &content);
     }
 }
 
@@ -323,7 +197,7 @@ pub fn restore_overlay_from_db(
     }
 }
 
-/// Spawn a background task that periodically syncs overlay PNG with DB.
+/// Spawn a background task that periodically syncs overlay text with DB.
 pub fn spawn_overlay_refresh_task(
     db: Db,
     overlay_state: OverlayState,
@@ -340,8 +214,7 @@ pub fn spawn_overlay_refresh_task(
             for camera in cameras {
                 if camera.camera_type.is_rtsp() {
                     let overlay = overlay_state.read().ok().and_then(|g| (*g).clone());
-                    let path = overlay_path_for_camera(&camera.name);
-                    render_overlay_png(&path, overlay.as_ref());
+                    render_overlay_pieces(&camera.name, overlay.as_ref());
                 }
             }
         }
@@ -349,7 +222,6 @@ pub fn spawn_overlay_refresh_task(
 }
 
 /// Update the overlay for the camera. Call when match is created/updated.
-/// Syncs overlay state and renders PNG. No RTMP restart needed (ffmpeg -reload picks up changes).
 pub fn update_overlay(
     db: &Db,
     overlay_state: &OverlayState,
@@ -357,25 +229,16 @@ pub fn update_overlay(
     _rtmp_processes: &rtmp::RtmpState,
     overlay_from_match: Option<MatchOverlay>,
 ) {
-    tracing::debug!(camera_id = %camera_id, "update_overlay: entry");
     let camera = match db.find_camera_by_id(camera_id) {
         Ok(Some(c)) => c,
-        Ok(None) => {
-            tracing::warn!(camera_id = %camera_id, "Camera not found by id");
-            return;
-        }
-        Err(e) => {
-            tracing::warn!(camera_id = %camera_id, error = %e, "Failed to find camera");
-            return;
-        }
+        Ok(None) => return,
+        Err(_) => return,
     };
 
     if !camera.camera_type.is_rtsp() {
-        tracing::debug!(camera_id = %camera_id, "Overlay only applies to RTSP cameras");
         return;
     }
 
-    tracing::debug!(camera_id = %camera_id, "update_overlay: resolving overlay data");
     let overlay = overlay_from_match.or_else(|| {
         db.find_active_pool_match_by_camera_id(camera_id)
             .ok()
@@ -388,14 +251,31 @@ pub fn update_overlay(
             })
     });
 
-    tracing::debug!(camera_id = %camera_id, "update_overlay: acquiring overlay_state write lock");
     if let Ok(mut guard) = overlay_state.write() {
         *guard = overlay.clone();
     }
-    tracing::debug!(camera_id = %camera_id, "update_overlay: write lock released, rendering PNG");
-    let path = overlay_path_for_camera(&camera.name);
-    render_overlay_png(&path, overlay.as_ref());
-    tracing::debug!(camera_id = %camera_id, "update_overlay: done");
+    render_overlay_pieces(&camera.name, overlay.as_ref());
+}
+
+/// Clear the overlay (e.g. when match ends).
+pub fn clear_overlay(
+    db: &Db,
+    overlay_state: &OverlayState,
+    camera_id: &str,
+    _rtmp_processes: &rtmp::RtmpState,
+) {
+    let camera = match db.find_camera_by_id(camera_id) {
+        Ok(Some(c)) if c.camera_type.is_rtsp() => c,
+        _ => return,
+    };
+    let current = overlay_state.read().ok().and_then(|g| (*g).clone());
+    if current.is_none() {
+        return;
+    }
+    if let Ok(mut guard) = overlay_state.write() {
+        *guard = None;
+    }
+    render_overlay_pieces(&camera.name, None);
 }
 
 #[cfg(test)]
@@ -404,32 +284,32 @@ mod tests {
     use crate::db::pool_match::{MatchPlayer, Rating};
 
     #[test]
-    fn overlay_path_for_camera_sanitizes_name() {
-        let path = overlay_path_for_camera("Camera 1");
-        assert!(path.to_string_lossy().ends_with("rtmp-overlay-Camera_1.png"));
+    fn overlay_path_for_camera_piece_sanitizes_name() {
+        let path = overlay_path_for_camera_piece("Camera 1", "p1name");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-Camera_1-p1name.txt"));
     }
 
     #[test]
-    fn overlay_path_for_camera_allows_alphanumeric_dash_underscore() {
-        let path = overlay_path_for_camera("cam-01_abc");
-        assert!(path.to_string_lossy().ends_with("rtmp-overlay-cam-01_abc.png"));
+    fn overlay_path_for_camera_piece_allows_alphanumeric_dash_underscore() {
+        let path = overlay_path_for_camera_piece("cam-01_abc", "score1");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-cam-01_abc-score1.txt"));
     }
 
     #[test]
-    fn overlay_path_for_camera_empty_default() {
-        let path = overlay_path_for_camera("");
-        assert!(path.to_string_lossy().ends_with("rtmp-overlay-default.png"));
+    fn overlay_path_for_camera_piece_empty_default() {
+        let path = overlay_path_for_camera_piece("", "p2name");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-default-p2name.txt"));
     }
 
     #[test]
-    fn overlay_path_for_camera_special_chars_become_underscore() {
-        let path = overlay_path_for_camera("cam@home!");
-        assert!(path.to_string_lossy().ends_with("rtmp-overlay-cam_home_.png"));
+    fn overlay_path_for_camera_piece_special_chars_become_underscore() {
+        let path = overlay_path_for_camera_piece("cam@home!", "raceto");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-cam_home_-raceto.txt"));
     }
 
     #[test]
     fn overlay_path_in_data_dir() {
-        let path = overlay_path_for_camera("test");
+        let path = overlay_path_for_camera_piece("test", "p1rating");
         assert!(path.to_string_lossy().contains("data"));
     }
 
@@ -471,39 +351,4 @@ mod tests {
         let overlay = OverlayPlayer::from_match_player(&p);
         assert_eq!(overlay.rating, None);
     }
-
-    #[test]
-    fn overlay_tmp_path_replaces_filename() {
-        let path = std::path::Path::new("data/rtmp-overlay-cam1.png");
-        let tmp = overlay_tmp_path(path);
-        assert_eq!(tmp.file_name().unwrap(), "rtmp-overlay.tmp.png");
-    }
-}
-
-/// Clear the overlay (e.g. when match ends).
-pub fn clear_overlay(
-    db: &Db,
-    overlay_state: &OverlayState,
-    camera_id: &str,
-    _rtmp_processes: &rtmp::RtmpState,
-) {
-    tracing::debug!(camera_id = %camera_id, "clear_overlay: entry");
-    let camera = match db.find_camera_by_id(camera_id) {
-        Ok(Some(c)) if c.camera_type.is_rtsp() => c,
-        _ => return,
-    };
-    tracing::debug!(camera_id = %camera_id, "clear_overlay: acquiring overlay_state read lock");
-    let current = overlay_state.read().ok().and_then(|g| (*g).clone());
-    if current.is_none() {
-        tracing::debug!(camera_id = %camera_id, "Overlay already cleared, skipping");
-        return;
-    }
-    tracing::debug!(camera_id = %camera_id, "clear_overlay: acquiring overlay_state write lock");
-    if let Ok(mut guard) = overlay_state.write() {
-        *guard = None;
-    }
-    tracing::debug!(camera_id = %camera_id, "clear_overlay: write lock released, rendering PNG");
-    let path = overlay_path_for_camera(&camera.name);
-    render_overlay_png(&path, None);
-    tracing::debug!(camera_id = %camera_id, "clear_overlay: done");
 }

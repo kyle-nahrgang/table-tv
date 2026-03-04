@@ -21,6 +21,7 @@ import {
   MenuItem,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import EditIcon from '@mui/icons-material/Edit'
 import StopIcon from '@mui/icons-material/Stop'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import LiveTvIcon from '@mui/icons-material/LiveTv'
@@ -562,14 +563,26 @@ export function Camera() {
                   {startError}
                 </Alert>
               )}
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="h6">
-                  Pool Match
-                </Typography>
-                {activeMatch?.started_by && (
-                  <Typography variant="body2" color="text.secondary">
-                    Started by {activeMatch.started_by}
+              <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <Box>
+                  <Typography variant="h6">
+                    Pool Match
                   </Typography>
+                  {activeMatch?.started_by && (
+                    <Typography variant="body2" color="text.secondary">
+                      Started by {activeMatch.started_by}
+                    </Typography>
+                  )}
+                </Box>
+                {activeMatch?.can_edit && (
+                  <Button
+                    startIcon={<EditIcon />}
+                    variant="outlined"
+                    size="small"
+                    onClick={() => navigate(`/match/${activeMatch.id}`)}
+                  >
+                    Edit details
+                  </Button>
                 )}
               </Box>
               {matchLoading ? (

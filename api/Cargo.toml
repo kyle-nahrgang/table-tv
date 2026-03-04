@@ -25,11 +25,8 @@ maintainer-scripts = "debian/"
 unit-name = "table-tv"
 
 [dependencies]
-ab_glyph = "0.2"
 axum = { version = "0.7", features = ["json"] }
 bytes = "1.0"
-image = "0.25"
-imageproc = "0.25"
 tokio-stream = { version = "0.1", features = ["sync"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", features = ["json"] }
