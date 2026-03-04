@@ -5,7 +5,7 @@ import { getSettings, updateSettings } from '../api/settings.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
 
 export function ServerSettings() {
-  const { refetch, version, upToDate } = useApiInfo()
+  const { refetch, version, candidateVersion } = useApiInfo()
   const [facebookConfigured, setFacebookConfigured] = useState(false)
   const [facebookRedirectUri, setFacebookRedirectUri] = useState('')
   const [loading, setLoading] = useState(true)
@@ -77,6 +77,11 @@ export function ServerSettings() {
     }
   }
 
+  const upToDate = version === candidateVersion;
+  console.log(upToDate)
+  console.log(version)
+  console.log(candidateVersion)
+
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="h4" component="h1" gutterBottom>
@@ -90,7 +95,6 @@ export function ServerSettings() {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Typography color="text.secondary">Current version:</Typography>
           <Typography sx={{ fontFamily: 'monospace' }}>{version || '(loading…)'}</Typography>
-          <Typography color="text.secondary">Up to date:</Typography>
           <Chip label={upToDate ? 'Up to date' : 'Update available'} size="small" color={upToDate ? 'success' : 'warning'} />
         </Box>
       </Paper>

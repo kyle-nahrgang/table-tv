@@ -21,7 +21,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: "20"
 
       # Optional: install dependencies
       - name: Install npm dependencies
@@ -32,37 +32,36 @@ jobs:
       - name: Install cargo-deb
         run: cargo install cargo-deb
 
-      # Build the Rust project, runs build.rs automatically
       - name: Build .deb package
-        run: cargo deb
+        run: cargo deb --deb-revision ${{ github.run_number }}
         working-directory: ./api
 
       - name: Publish Debian repo to gh-pages
         run: |
-            # Create proper root layout
-            mkdir -p dists/stable/main/binary-amd64
-            mkdir -p pool/main/y
-      
-            # Copy .deb file to pool
-            cp api/target/debian/*.deb pool/main/y/
-      
-            # Generate Packages.gz
-            dpkg-scanpackages pool /dev/null | gzip -9c > dists/stable/main/binary-amd64/Packages.gz
-      
-            # Disable Jekyll
-            touch .nojekyll
-      
-            # Configure git
-            git config --global user.name "${{ github.actor }}"
-            git config --global user.email "${{ github.actor }}@users.noreply.github.com"
-      
-            # Switch to orphan gh-pages branch
-            git checkout --orphan gh-pages
-      
-            # Remove any old files from branch
-            git rm -rf . || true
-      
-            # Add new repo files
-            git add .
-            git commit -m "Publish Debian repo"
-            git push -f origin gh-pages
+          # Create proper root layout
+          mkdir -p dists/stable/main/binary-amd64
+          mkdir -p pool/main/y
+
+          # Copy .deb file to pool
+          cp api/target/debian/*.deb pool/main/y/
+
+          # Generate Packages.gz
+          dpkg-scanpackages pool /dev/null | gzip -9c > dists/stable/main/binary-amd64/Packages.gz
+
+          # Disable Jekyll
+          touch .nojekyll
+
+          # Configure git
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+
+          # Switch to orphan gh-pages branch
+          git checkout --orphan gh-pages
+
+          # Remove any old files from branch
+          git rm -rf . || true
+
+          # Add new repo files
+          git add .
+          git commit -m "Publish Debian repo"
+          git push -f origin gh-pages

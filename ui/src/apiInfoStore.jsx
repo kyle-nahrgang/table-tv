@@ -24,7 +24,7 @@ export function ApiInfoProvider({ children }) {
   const [camerasConfigured, setCamerasConfigured] = useState(false)
   const [recordDeleteAfter, setRecordDeleteAfter] = useState('')
   const [version, setVersion] = useState('')
-  const [upToDate, setUpToDate] = useState(true)
+  const [candidateVersion, setCandidateVersion] = useState('')
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
   const intervalRef = useRef(null)
@@ -42,7 +42,7 @@ export function ApiInfoProvider({ children }) {
       setCamerasConfigured(data.cameras_configured ?? false)
       setRecordDeleteAfter(data.record_delete_after || '')
       setVersion(data.version || '')
-      setUpToDate(data.up_to_date ?? true)
+      setCandidateVersion(data.candidate_version ?? '')
       setRetrying(false)
       setLoading(false)
     } catch {
@@ -78,7 +78,7 @@ export function ApiInfoProvider({ children }) {
   }, [retrying])
 
   return (
-    <ApiInfoContext.Provider value={{ initialized, locationName, hasUsers, camerasConfigured, recordDeleteAfter, version, upToDate, loading, retrying, refetch }}>
+    <ApiInfoContext.Provider value={{ initialized, locationName, hasUsers, camerasConfigured, recordDeleteAfter, version, candidateVersion, loading, retrying, refetch }}>
       {children}
     </ApiInfoContext.Provider>
   )

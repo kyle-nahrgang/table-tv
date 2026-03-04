@@ -9,7 +9,8 @@ use crate::error::ApiError;
 pub struct ApiServerInfo {
     pub initialized: bool,
     pub version: String,
-    pub up_to_date: bool,
+    pub candidate_version: String,
+
     #[serde(default)]
     pub location_name: String,
     /// True if at least one user has registered (signed in).
@@ -29,18 +30,10 @@ pub async fn info(State(app): State<AppState>) -> Result<axum::Json<ApiServerInf
     let settings = app.db.get_settings().unwrap_or_default();
     let has_users = app.db.has_admin().unwrap_or(false);
     let cameras_configured = app.db.cameras_configured().unwrap_or(false);
-    Ok(axum::Json(ApiServerInfo {
-        initialized,
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        up_to_date: check_up_to_date().await,
-        location_name: settings.location_name,
-        has_users,
-        cameras_configured,
-        record_delete_after: settings.record_delete_after,
-    }))
-}
 
-async fn check_up_to_date() -> bool {
+    let mut version = env!("CARGO_PKG_VERSION").to_string();
+    let mut candidate_version = version.clone();
+
     let output = Command::new("apt-cache")
         .arg("policy")
         .arg(env!("CARGO_PKG_NAME"))
@@ -51,17 +44,30 @@ async fn check_up_to_date() -> bool {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             if line.trim().starts_with("Candidate:") {
-                let candidate = line
+                candidate_version = line
                     .split_whitespace()
                     .nth(1)
                     .unwrap_or(env!("CARGO_PKG_VERSION"))
                     .to_string();
-                return candidate == "(none)" || candidate == env!("CARGO_PKG_VERSION");
+            } else if line.trim().starts_with("Installed") {
+                version = line
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or(env!("CARGO_PKG_VERSION"))
+                    .to_string();
             }
         }
     }
 
-    true
+    Ok(axum::Json(ApiServerInfo {
+        initialized,
+        version,
+        candidate_version,
+        location_name: settings.location_name,
+        has_users,
+        cameras_configured,
+        record_delete_after: settings.record_delete_after,
+    }))
 }
 
 pub fn routes() -> axum::Router<AppState> {
