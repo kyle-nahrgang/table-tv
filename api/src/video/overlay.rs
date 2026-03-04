@@ -15,7 +15,7 @@ use crate::video::rtmp;
 const OVERLAY_PNG_DIR: &str = "data";
 
 const OVERLAY_WIDTH: u32 = 1280;
-const OVERLAY_HEIGHT: u32 = 80;
+const OVERLAY_HEIGHT: u32 = 100;
 
 fn overlay_name_for_camera(camera_name: &str) -> String {
     let sanitized: String = camera_name
@@ -90,14 +90,14 @@ fn draw_match_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &FontRe
     let bar_rect = Rect::at(0, 0).of_size(w as u32, h as u32);
     draw_filled_rect_mut(img, bar_rect, Rgba([0u8, 0, 0, 230]));
 
-    let scale = 20.0f32;
-    let scale_sm = 13.0f32;
+    let scale = 28.0f32;
+    let scale_sm = 18.0f32;
     let white = Rgba([255u8, 255, 255, 255]);
     let gray = Rgba([204u8, 204, 204, 255]);
     let bar_color = Rgba([0u8, 0, 0, 230]);
     let px = 16i32;
     let center_y = h / 2;
-    let line_h = 24i32;
+    let line_h = 32i32;
 
     let p1_name_y = center_y - line_h / 2;
     let p1_rating_y = center_y + line_h / 2;
@@ -123,7 +123,7 @@ fn draw_match_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &FontRe
         );
     }
 
-    let score_scale = 22.0f32;
+    let score_scale = 30.0f32;
     let s1 = overlay.player_one.games_won.to_string();
     let s2 = overlay.player_two.games_won.to_string();
     let race_line2 = format!(
@@ -141,7 +141,7 @@ fn draw_match_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &FontRe
     let (s2_w, s2_h) =
         imageproc::drawing::text_size(ab_glyph::PxScale::from(score_scale), font, &s2);
 
-    let circle_d = 32i32;
+    let circle_d = 40i32;
     let circle_r = circle_d / 2;
     let center_gap = 12i32;
     let race_w = race1_w.max(race2_w);
@@ -239,11 +239,11 @@ fn draw_practice_to_rgba(img: &mut RgbaImage, overlay: &MatchOverlay, font: &Fon
     let bar_rect = Rect::at(0, 0).of_size(w as u32, h as u32);
     draw_filled_rect_mut(img, bar_rect, Rgba([0u8, 0, 0, 230]));
 
-    let scale = 20.0f32;
+    let scale = 28.0f32;
     let white = Rgba([255u8, 255, 255, 255]);
     let px = 16i32;
     let center_y = h / 2;
-    let line_h = 24i32;
+    let line_h = 32i32;
 
     let left_text = format!("Practice: {}", overlay.player_one.name);
     let right_text = format!("Rack #{}", overlay.player_one.games_won + 1);
@@ -276,6 +276,7 @@ fn overlay_tmp_path(path: &std::path::Path) -> std::path::PathBuf {
 /// Render overlay PNG (match bar only) and write to path.
 /// Uses opaque black background (not transparent) so FFmpeg's yuv420p conversion doesn't
 /// produce green artifacts when vstacking with the video.
+/// Writes in-place (same inode) so FFmpeg can see updates when it re-reads the image.
 pub fn render_overlay_png(path: &std::path::Path, overlay: Option<&MatchOverlay>) {
     if let Some(font) = load_font() {
         let mut img = RgbaImage::from_pixel(OVERLAY_WIDTH, OVERLAY_HEIGHT, Rgba([0, 0, 0, 255]));
@@ -285,15 +286,16 @@ pub fn render_overlay_png(path: &std::path::Path, overlay: Option<&MatchOverlay>
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
+        // Write to tmp first, then overwrite target in-place so FFmpeg (same inode) sees updates
         let tmp = overlay_tmp_path(path);
         if let Err(e) = img.save(&tmp) {
             tracing::warn!(path = ?tmp, error = %e, "Failed to save overlay PNG");
             return;
         }
-        if let Err(e) = std::fs::rename(&tmp, path) {
-            tracing::warn!(path = ?path, error = %e, "Failed to rename overlay PNG");
-            let _ = std::fs::remove_file(&tmp);
+        if let Err(e) = std::fs::copy(&tmp, path) {
+            tracing::warn!(path = ?path, error = %e, "Failed to write overlay PNG");
         }
+        let _ = std::fs::remove_file(&tmp);
     } else {
         tracing::warn!("No font for overlay PNG");
     }

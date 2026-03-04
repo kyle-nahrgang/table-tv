@@ -1,11 +1,12 @@
-//! RTSP camera streaming via FFmpeg. Reads from rtsp:// URL and outputs MJPEG.
+//! RTSP camera streaming via FFmpeg. Reads from RTSP, applies overlay (drawtext + score bar), outputs MJPEG.
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 
-use crate::video::{mjpeg, CameraSource};
+use crate::video::{mjpeg, rtmp, CameraSource};
 
 /// Shared state for an RTSP camera stream.
 pub struct RtspCameraState {
@@ -18,17 +19,58 @@ impl CameraSource for RtspCameraState {
     }
 }
 
-/// Spawn FFmpeg to read from RTSP URL and output MJPEG to stdout.
-fn spawn_rtsp_ffmpeg(rtsp_url: &str) -> Option<(Child, broadcast::Sender<bytes::Bytes>)> {
+/// Spawn FFmpeg to read from RTSP, apply overlay (same as RTMP pipeline), output MJPEG to stdout.
+fn spawn_rtsp_ffmpeg_with_overlay(
+    rtsp_url: &str,
+    overlay_path: &Path,
+    location_name: &str,
+    camera_name: &str,
+) -> Option<(Child, broadcast::Sender<bytes::Bytes>)> {
+    let overlay_path_str = match rtmp::resolve_overlay_path(overlay_path) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(path = ?overlay_path, "Overlay path resolution failed: {}", e);
+            return None;
+        }
+    };
+
+    let filter = rtmp::build_filter_complex_for_preview(location_name, camera_name);
+
+    let args = [
+        "-y",
+        "-rtsp_transport",
+        "udp",
+        "-fflags",
+        "nobuffer",
+        "-flags",
+        "low_delay",
+        "-analyzeduration",
+        "1000000",
+        "-probesize",
+        "1000000",
+        "-i",
+        rtsp_url,
+        "-f",
+        "image2",
+        "-loop",
+        "1",
+        "-r",
+        "30",
+        "-i",
+        &overlay_path_str,
+        "-filter_complex",
+        &filter,
+        "-map",
+        "[out]",
+        "-f",
+        "mjpeg",
+        "-q:v",
+        "5",
+        "-",
+    ];
+
     let child = Command::new("ffmpeg")
-        .args([
-            "-y",
-            "-rtsp_transport", "udp",
-            "-i", rtsp_url,
-            "-f", "mjpeg",
-            "-q:v", "5",
-            "-",
-        ])
+        .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn();
@@ -45,7 +87,7 @@ fn spawn_rtsp_ffmpeg(rtsp_url: &str) -> Option<(Child, broadcast::Sender<bytes::
             }
         }
         Err(e) => {
-            tracing::warn!(url = %rtsp_url, "FFmpeg RTSP capture failed: {}", e);
+            tracing::warn!(url = %rtsp_url, "FFmpeg preview capture failed: {}", e);
             None
         }
     }
@@ -56,7 +98,14 @@ static RTSP_STREAMS: std::sync::LazyLock<RwLock<HashMap<String, Arc<RtspCameraSt
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Get or create RTSP stream for the given camera. Returns the broadcast sender's state.
-pub fn get_or_start_rtsp_stream(camera_id: &str, rtsp_url: &str) -> Option<Arc<RtspCameraState>> {
+/// Uses FFmpeg with overlay (drawtext + score bar) so the preview matches RTMP output.
+pub fn get_or_start_rtsp_stream(
+    camera_id: &str,
+    rtsp_url: &str,
+    overlay_path: &Path,
+    location_name: &str,
+    camera_name: &str,
+) -> Option<Arc<RtspCameraState>> {
     {
         let guard = RTSP_STREAMS.read().unwrap();
         if let Some(state) = guard.get(camera_id) {
@@ -64,7 +113,12 @@ pub fn get_or_start_rtsp_stream(camera_id: &str, rtsp_url: &str) -> Option<Arc<R
         }
     }
 
-    let (mut child, tx) = spawn_rtsp_ffmpeg(rtsp_url)?;
+    let (mut child, tx) = spawn_rtsp_ffmpeg_with_overlay(
+        rtsp_url,
+        overlay_path,
+        location_name,
+        camera_name,
+    )?;
     let state = Arc::new(RtspCameraState { tx: tx.clone() });
     let camera_id = camera_id.to_string();
 

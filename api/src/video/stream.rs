@@ -41,9 +41,21 @@ pub async fn camera_stream(
                     "RTSP URL is not configured for this camera.".to_string(),
                 ));
             }
-            // Always use MediaMTX proxy (single connection to camera, rolling recording)
+            // Ensure overlay is rendered (match bar, or empty when no match)
+            overlay::update_overlay(&app.db, &app.overlay, &id, &app.rtmp_processes, None);
+            let settings = app.db.get_settings().unwrap_or_default();
+            let location_name = settings.location_name.as_str();
+            let camera_name = camera.name.as_str();
+            let overlay_path = overlay::overlay_path_for_camera(camera_name);
+            // Use MediaMTX proxy; FFmpeg applies overlay (drawtext + score bar) so preview matches RTMP output
             let stream_url = video::mediamtx_rtsp_url(&id);
-            let s = match rtsp_camera::get_or_start_rtsp_stream(&id, &stream_url) {
+            let s = match rtsp_camera::get_or_start_rtsp_stream(
+                &id,
+                &stream_url,
+                &overlay_path,
+                location_name,
+                camera_name,
+            ) {
                 Some(s) => s,
                 None => {
                     return Err(ApiError::BadRequest(

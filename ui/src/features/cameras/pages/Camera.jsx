@@ -158,6 +158,13 @@ export function Camera() {
     if (camera?.id) fetchActiveMatch()
   }, [camera?.id, fetchActiveMatch])
 
+  // Poll for active match updates when a match is in progress (keeps overlay score in sync)
+  useEffect(() => {
+    if (!camera?.id || !activeMatch?.id) return
+    const interval = setInterval(fetchActiveMatch, 3000)
+    return () => clearInterval(interval)
+  }, [camera?.id, activeMatch?.id, fetchActiveMatch])
+
   const fetchCameraMatches = useCallback(async () => {
     if (!camera?.id) return
     try {
@@ -455,7 +462,7 @@ export function Camera() {
     )
   }
 
-  const { label, detail } = formatCameraType(camera.camera_type, 'label')
+  const { label } = formatCameraType(camera.camera_type, 'labelNoUrl')
   const hasStream = !!camera
 
   return (
@@ -476,11 +483,6 @@ export function Camera() {
             <Chip label="Offline" size="small" variant="outlined" color="default" />
           )}
         </Box>
-        {detail && (
-          <Typography color="text.secondary">
-            {detail}
-          </Typography>
-        )}
         {hasStream && camera.connection_status === false && (
           <Alert severity="warning" sx={{ mt: 2 }}>
             Camera is offline. Streaming, practice, and matches are disabled until the camera reconnects.
@@ -525,7 +527,7 @@ export function Camera() {
                 rtmpActive={rtmpActive}
                 cameraName={camera.name}
                 locationName={locationName}
-                overlayMatch={activeMatch}
+                overlayMatch={null}
               />
               <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography variant="body2" color="text.secondary" sx={{ flexBasis: { xs: '100%', sm: 'auto' } }}>

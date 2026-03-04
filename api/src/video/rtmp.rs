@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 /// Resolve overlay path for ffmpeg input. Creates parent dir and returns canonical path string.
-fn resolve_overlay_path(overlay_path: &Path) -> Result<String, String> {
+pub(crate) fn resolve_overlay_path(overlay_path: &Path) -> Result<String, String> {
     std::fs::create_dir_all(overlay_path.parent().unwrap_or(Path::new(".")))
         .map_err(|e| format!("Failed to create data dir: {}", e))?;
 
@@ -125,9 +125,22 @@ fn escape_drawtext(s: &str) -> String {
 }
 
 /// Build filter_complex: overlay below video (vstack) + drawtext.
-/// Overlay PNG is placed BELOW the video, increasing output height by 80px.
+/// Overlay PNG is placed BELOW the video, increasing output height by 100px.
 /// Input 0: RTSP (video+audio), Input 1: anullsrc, Input 2: overlay.
 fn build_filter_complex(location_name: &str, camera_name: &str) -> String {
+    build_filter_complex_with_overlay_input(location_name, camera_name, 2)
+}
+
+/// Build filter_complex for preview pipeline. Overlay is input 1 (RTSP=0, overlay=1).
+pub(crate) fn build_filter_complex_for_preview(location_name: &str, camera_name: &str) -> String {
+    build_filter_complex_with_overlay_input(location_name, camera_name, 1)
+}
+
+fn build_filter_complex_with_overlay_input(
+    location_name: &str,
+    camera_name: &str,
+    overlay_input: u32,
+) -> String {
     let font = "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
     let base = "fontsize=20:fontcolor=white";
     let mut parts: Vec<String> = vec![];
@@ -149,10 +162,10 @@ fn build_filter_complex(location_name: &str, camera_name: &str) -> String {
         base, font
     ));
     let drawtext = parts.join(",");
-    // Drawtext on main before vstack, then stack overlay below.
+    let overlay_label = format!("[{}:v]", overlay_input);
     format!(
-        "[0:v]fps=30:round=near,scale=960:540,{},format=yuv420p[main];[2:v]loop=-1:1:0,scale=960:80,format=yuv420p[overlay];[main][overlay]vstack=inputs=2,format=yuv420p[out]",
-        drawtext
+        "[0:v]fps=30:round=near,scale=960:540,{},format=yuv420p[main];{}loop=-1:1:0,scale=960:100,format=yuv420p[overlay];[main][overlay]vstack=inputs=2,format=yuv420p[out]",
+        drawtext, overlay_label
     )
 }
 

@@ -82,6 +82,20 @@ export function Match() {
     return () => { cancelled = true }
   }, [id])
 
+  // Poll for match updates when match is active (keeps overlay score in sync)
+  useEffect(() => {
+    if (!id || !match?.id || match.end_time) return
+    const interval = setInterval(async () => {
+      try {
+        const data = await getMatch(id)
+        setMatch(data)
+      } catch {
+        // ignore
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [id, match?.id, match?.end_time])
+
   useEffect(() => {
     if (!match?.camera_id) {
       setCamera(null)
@@ -395,7 +409,7 @@ export function Match() {
               rtmpActive={rtmpActive}
               cameraName={camera.name}
               locationName={locationName}
-              overlayMatch={isActive ? match : null}
+              overlayMatch={null}
             />
           </Box>
         )}

@@ -18,7 +18,7 @@ import { LiveTimestamp } from '../../../components/LiveTimestamp.jsx'
  * @param {boolean} props.rtmpActive
  * @param {string} props.cameraName
  * @param {string} [props.locationName]
- * @param {Object|null} [props.overlayMatch] - Match to show in score overlay (when !end_time)
+ * @param {Object|null} [props.overlayMatch] - Match to show in score overlay (when !end_time). Pass null when stream has overlay burned in (FFmpeg output).
  */
 export function StreamPreview({
   streamUrl,
@@ -55,7 +55,7 @@ export function StreamPreview({
         >
           <Typography>Stream unavailable</Typography>
           <Typography variant="body2" sx={{ opacity: 0.8 }}>
-            Check that the RTSP URL is valid and reachable
+            Check that the stream is valid and reachable
           </Typography>
           <Button
             size="small"
@@ -172,8 +172,8 @@ export function StreamPreview({
               sx={{
                 background: 'rgba(0,0,0,0.9)',
                 color: '#fff',
-                py: 1.25,
-                px: 2,
+                py: 1.5,
+                px: 2.5,
                 borderRadius: '0 0 8px 8px',
                 display: 'flex',
                 alignItems: 'center',
@@ -183,46 +183,46 @@ export function StreamPreview({
             >
               {match.match_type === 'practice' ? (
                 <>
-                  <Typography variant="subtitle2" fontWeight={600} noWrap sx={{ maxWidth: '100%' }}>
+                  <Typography variant="h6" fontWeight={600} noWrap sx={{ maxWidth: '100%', fontSize: '1.1rem' }}>
                     Practice: {match.player_one.name}
                   </Typography>
-                  <Typography variant="subtitle1" fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '1.1rem' }}>
                     Rack #{match.player_one.games_won + 1}
                   </Typography>
                 </>
               ) : (
                 <>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0, flex: 1 }}>
-                    <Typography variant="subtitle2" fontWeight={600} noWrap sx={{ maxWidth: '100%' }}>
+                    <Typography variant="h6" fontWeight={600} noWrap sx={{ maxWidth: '100%', fontSize: '1.1rem' }}>
                       {match.player_one.name}
                     </Typography>
                     {match.player_one.rating && (
-                      <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                      <Typography variant="body2" color="rgba(255,255,255,0.85)" sx={{ fontSize: '0.95rem' }}>
                         {match.player_one.rating.type} {match.player_one.rating.value}
                       </Typography>
                     )}
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                     <Box
                       sx={{
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        minWidth: 32,
-                        height: 32,
+                        minWidth: 44,
+                        height: 44,
                         borderRadius: '50%',
                         border: '2px solid #fff',
                       }}
                     >
-                      <Typography variant="subtitle1" fontWeight={700}>
+                      <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
                         {match.player_one.games_won}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                      <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                      <Typography variant="body2" color="rgba(255,255,255,0.85)" sx={{ fontSize: '0.9rem' }}>
                         race to
                       </Typography>
-                      <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                      <Typography variant="body2" color="rgba(255,255,255,0.85)" sx={{ fontSize: '0.9rem' }}>
                         {match.player_one.race_to}/{match.player_two.race_to}
                       </Typography>
                     </Box>
@@ -231,23 +231,23 @@ export function StreamPreview({
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        minWidth: 32,
-                        height: 32,
+                        minWidth: 44,
+                        height: 44,
                         borderRadius: '50%',
                         border: '2px solid #fff',
                       }}
                     >
-                      <Typography variant="subtitle1" fontWeight={700}>
+                      <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1.25rem' }}>
                         {match.player_two.games_won}
                       </Typography>
                     </Box>
                   </Box>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 0, flex: 1 }}>
-                    <Typography variant="subtitle2" fontWeight={600} noWrap sx={{ maxWidth: '100%' }}>
+                    <Typography variant="h6" fontWeight={600} noWrap sx={{ maxWidth: '100%', fontSize: '1.1rem' }}>
                       {match.player_two.name}
                     </Typography>
                     {match.player_two.rating && (
-                      <Typography variant="caption" color="rgba(255,255,255,0.8)">
+                      <Typography variant="body2" color="rgba(255,255,255,0.85)" sx={{ fontSize: '0.95rem' }}>
                         {match.player_two.rating.type} {match.player_two.rating.value}
                       </Typography>
                     )}

@@ -221,7 +221,7 @@ export function Home() {
                             )}
                           </>
                         }
-                        secondary={formatCameraType(camera.camera_type)}
+                        secondary={formatCameraType(camera.camera_type, 'stringNoUrl')}
                       />
                     </ListItemButton>
                   )

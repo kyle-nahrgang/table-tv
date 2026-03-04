@@ -23,13 +23,16 @@ function buildCameraType(url = '') {
 /**
  * Format camera type for display.
  * @param {Camera['camera_type']} cameraType
- * @param {'label'|'string'} [format='string'] - label: { label, detail }; string: "RTSP: url" etc
+ * @param {'label'|'labelNoUrl'|'string'|'stringNoUrl'} [format='string'] - label: { label, detail }; labelNoUrl: { label, detail: null }; string: "RTSP: url"; stringNoUrl: "RTSP"
  * @returns {{ label: string, detail: string|null }|string}
  */
 export function formatCameraType(cameraType, format = 'string') {
   const parsed = parseCameraType(cameraType)
-  const str = `RTSP: ${parsed.url || '(no url)'}`
-  return format === 'label' ? { label: 'RTSP', detail: parsed.url || '(no url)' } : str
+  const url = parsed.url || '(no url)'
+  if (format === 'label') return { label: 'RTSP', detail: url }
+  if (format === 'labelNoUrl') return { label: 'RTSP', detail: null }
+  if (format === 'stringNoUrl') return 'RTSP'
+  return `RTSP: ${url}`
 }
 
 /**
