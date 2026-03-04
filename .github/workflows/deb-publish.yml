@@ -42,7 +42,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PACKAGE_FILE=$(ls target/debian/*.deb)
+          PACKAGE_FILE=$(ls api/target/debian/*.deb)
           echo "Uploading $PACKAGE_FILE"
           curl -u ${{ github.actor }}:$GITHUB_TOKEN \
             --upload-file "$PACKAGE_FILE" \
