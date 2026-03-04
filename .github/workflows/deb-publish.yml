@@ -37,16 +37,32 @@ jobs:
         run: cargo deb
         working-directory: ./api
 
-      # Deploy .deb to GitHub Pages
       - name: Publish Debian repo to gh-pages
         run: |
-            mkdir -p repo/dists/stable/main/binary-amd64
-            mkdir -p repo/pool/main/y
-            cp api/target/debian/*.deb repo/pool/main/y/
-            dpkg-scanpackages repo/pool /dev/null | gzip -9c > repo/dists/stable/main/binary-amd64/Packages.gz
+            # Create proper root layout
+            mkdir -p dists/stable/main/binary-amd64
+            mkdir -p pool/main/y
+      
+            # Copy .deb file to pool
+            cp api/target/debian/*.deb pool/main/y/
+      
+            # Generate Packages.gz
+            dpkg-scanpackages pool /dev/null | gzip -9c > dists/stable/main/binary-amd64/Packages.gz
+      
+            # Disable Jekyll
+            touch .nojekyll
+      
+            # Configure git
             git config --global user.name "${{ github.actor }}"
             git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+      
+            # Switch to orphan gh-pages branch
             git checkout --orphan gh-pages
-            git add repo
+      
+            # Remove any old files from branch
+            git rm -rf . || true
+      
+            # Add new repo files
+            git add .
             git commit -m "Publish Debian repo"
             git push -f origin gh-pages
