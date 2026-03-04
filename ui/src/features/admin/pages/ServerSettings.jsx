@@ -88,7 +88,8 @@ export function ServerSettings() {
     setUpgradeRunning(true)
     setUpgradePhase('check')
     try {
-      await checkForUpgrades(() => {}) // discard output - only show output for upgrade
+      await checkForUpgrades(() => {})
+      refetch({ silent: true })
     } catch (e) {
       setUpgradeOutput(`Error: ${e.message}`)
     } finally {
@@ -125,7 +126,7 @@ export function ServerSettings() {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
           <Typography color="text.secondary">Current version:</Typography>
           <Typography sx={{ fontFamily: 'monospace' }}>{version || '(loading…)'}</Typography>
-          <Chip label={upToDate ? 'Up to date' : 'Update available'} size="small" color={upToDate ? 'success' : 'warning'} />
+          <Chip label={upToDate ? 'Up to date' : (candidateVersion ? `Update available (${candidateVersion})` : 'Update available')} size="small" color={upToDate ? 'success' : 'warning'} />
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Button

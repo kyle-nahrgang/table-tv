@@ -39,21 +39,16 @@ pub async fn info(State(app): State<AppState>) -> Result<axum::Json<ApiServerInf
         .output()
         .await;
 
+    let pkg_version = env!("CARGO_PKG_VERSION");
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             if line.trim().starts_with("Candidate:") {
-                candidate_version = line
-                    .split_whitespace()
-                    .nth(1)
-                    .unwrap_or(env!("CARGO_PKG_VERSION"))
-                    .to_string();
+                let v = line.split_whitespace().nth(1).unwrap_or("").to_string();
+                candidate_version = if v.is_empty() || v == "(none)" { pkg_version.to_string() } else { v };
             } else if line.trim().starts_with("Installed") {
-                version = line
-                    .split_whitespace()
-                    .nth(1)
-                    .unwrap_or(env!("CARGO_PKG_VERSION"))
-                    .to_string();
+                let v = line.split_whitespace().nth(1).unwrap_or("").to_string();
+                version = if v.is_empty() || v == "(none)" { pkg_version.to_string() } else { v };
             }
         }
     }
