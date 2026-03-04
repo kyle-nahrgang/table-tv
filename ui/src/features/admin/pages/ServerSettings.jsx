@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Box, Typography, Paper, Chip, TextField, Button } from '@mui/material'
 import { getFacebookStatus } from '../../cameras/api/cameras.js'
 import { getSettings, updateSettings } from '../api/settings.js'
+import { checkForUpgrades, upgradeNow } from '../api/upgrade.js'
 import { useApiInfo } from '../../../apiInfoStore.jsx'
 
 export function ServerSettings() {
@@ -17,6 +18,8 @@ export function ServerSettings() {
   const [recordDeleteAfter, setRecordDeleteAfter] = useState('24h')
   const [rollingSaving, setRollingSaving] = useState(false)
   const [rollingSaved, setRollingSaved] = useState(false)
+  const [upgradeOutput, setUpgradeOutput] = useState('')
+  const [upgradeRunning, setUpgradeRunning] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -77,10 +80,32 @@ export function ServerSettings() {
     }
   }
 
-  const upToDate = version === candidateVersion;
-  console.log(upToDate)
-  console.log(version)
-  console.log(candidateVersion)
+  const upToDate = version === candidateVersion
+
+  const handleCheckForUpgrades = async () => {
+    setUpgradeOutput('')
+    setUpgradeRunning(true)
+    try {
+      await checkForUpgrades((chunk) => setUpgradeOutput((prev) => prev + chunk))
+    } catch (e) {
+      setUpgradeOutput((prev) => prev + (prev ? '\n' : '') + `Error: ${e.message}`)
+    } finally {
+      setUpgradeRunning(false)
+    }
+  }
+
+  const handleUpgradeNow = async () => {
+    setUpgradeOutput('')
+    setUpgradeRunning(true)
+    try {
+      await upgradeNow((chunk) => setUpgradeOutput((prev) => prev + chunk))
+      refetch({ silent: true })
+    } catch (e) {
+      setUpgradeOutput((prev) => prev + (prev ? '\n' : '') + `Error: ${e.message}`)
+    } finally {
+      setUpgradeRunning(false)
+    }
+  }
 
   return (
     <Box sx={{ p: 2 }}>
@@ -92,11 +117,47 @@ export function ServerSettings() {
         <Typography variant="h6" gutterBottom>
           Server Version
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
           <Typography color="text.secondary">Current version:</Typography>
           <Typography sx={{ fontFamily: 'monospace' }}>{version || '(loading…)'}</Typography>
           <Chip label={upToDate ? 'Up to date' : 'Update available'} size="small" color={upToDate ? 'success' : 'warning'} />
         </Box>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleCheckForUpgrades}
+            disabled={upgradeRunning}
+          >
+            Check for upgrades
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleUpgradeNow}
+            disabled={upgradeRunning || upToDate}
+          >
+            Upgrade now
+          </Button>
+        </Box>
+        {upgradeOutput && (
+          <Box
+            component="pre"
+            sx={{
+              bgcolor: 'action.hover',
+              p: 1.5,
+              borderRadius: 1,
+              overflow: 'auto',
+              fontSize: '0.75rem',
+              fontFamily: 'monospace',
+              maxHeight: 300,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+            }}
+          >
+            {upgradeOutput}
+          </Box>
+        )}
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
