@@ -207,3 +207,97 @@ pub fn config() -> &'static AppConfig {
         .get()
         .expect("config not initialized; call config::init() first")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{host_from_url, AppConfig, ConfigFile};
+
+    #[test]
+    fn host_from_url_http() {
+        assert_eq!(host_from_url("http://127.0.0.1:9997"), "127.0.0.1");
+    }
+
+    #[test]
+    fn host_from_url_https() {
+        assert_eq!(host_from_url("https://example.com:443/path"), "example.com");
+    }
+
+    #[test]
+    fn host_from_url_no_scheme() {
+        assert_eq!(host_from_url("192.168.1.1:9997"), "192.168.1.1");
+    }
+
+    #[test]
+    fn host_from_url_trimmed() {
+        assert_eq!(host_from_url("  http://localhost:8080  "), "localhost");
+    }
+
+    #[test]
+    fn host_from_url_empty() {
+        // Empty string splits to [""], so first segment is "" (unwrap_or only applies to None)
+        assert_eq!(host_from_url(""), "");
+    }
+
+    #[test]
+    fn app_config_default() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.port, 8080);
+        assert_eq!(cfg.sqlite_path, "data/table-tv.db");
+        assert_eq!(cfg.mediamtx_api_url, "http://127.0.0.1:9997");
+        assert_eq!(cfg.mediamtx_playback_url, "http://127.0.0.1:9996");
+        assert_eq!(cfg.mediamtx_rtsp_host, "127.0.0.1");
+        assert_eq!(cfg.mediamtx_rtsp_port, "8554");
+    }
+
+    #[test]
+    fn config_file_from_toml_minimal() {
+        let file: ConfigFile = toml::from_str("").unwrap();
+        let config: AppConfig = file.into();
+        assert_eq!(config.port, 8080);
+    }
+
+    #[test]
+    fn config_file_from_toml_with_mediamtx() {
+        let file: ConfigFile = toml::from_str(
+            r#"
+            [mediamtx]
+            api_url = "http://192.168.1.100:9997"
+            rtsp_port = "8555"
+            "#,
+        )
+        .unwrap();
+        let config: AppConfig = file.into();
+        assert_eq!(config.mediamtx_api_url, "http://192.168.1.100:9997");
+        assert_eq!(config.mediamtx_playback_url, "http://192.168.1.100:9996");
+        assert_eq!(config.mediamtx_rtsp_host, "192.168.1.100");
+        assert_eq!(config.mediamtx_rtsp_port, "8555");
+    }
+
+    #[test]
+    fn config_file_from_toml_full() {
+        let file: ConfigFile = toml::from_str(
+            r#"
+            port = 3000
+            sqlite_path = "/var/lib/table-tv.db"
+            [auth0]
+            domain = "test.auth0.com"
+            client_id = "abc123"
+            audience = "https://api"
+            [facebook]
+            app_id = "fb123"
+            app_secret = "secret"
+            [stunnel]
+            host = "stunnel.local"
+            "#,
+        )
+        .unwrap();
+        let config: AppConfig = file.into();
+        assert_eq!(config.port, 3000);
+        assert_eq!(config.sqlite_path, "/var/lib/table-tv.db");
+        assert_eq!(config.auth0_domain.as_deref(), Some("test.auth0.com"));
+        assert_eq!(config.auth0_client_id.as_deref(), Some("abc123"));
+        assert_eq!(config.auth0_audience.as_deref(), Some("https://api"));
+        assert_eq!(config.facebook_app_id.as_deref(), Some("fb123"));
+        assert_eq!(config.stunnel_host, "stunnel.local");
+    }
+}

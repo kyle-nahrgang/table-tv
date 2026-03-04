@@ -427,3 +427,69 @@ pub fn routes() -> axum::Router<AppState> {
             axum::routing::post(facebook_live_url),
         )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderMap;
+
+    #[test]
+    fn create_and_verify_signed_state_roundtrip() {
+        let secret = b"test-secret-key";
+        let return_to = "/admin/settings";
+        let state = create_signed_state(return_to, secret);
+        assert!(state.contains('.'));
+        let parts: Vec<&str> = state.splitn(2, '.').collect();
+        assert_eq!(parts.len(), 2);
+        let verified = verify_signed_state(&state, secret);
+        assert_eq!(verified, Some(return_to.to_string()));
+    }
+
+    #[test]
+    fn verify_signed_state_rejects_wrong_secret() {
+        let secret = b"correct-secret";
+        let return_to = "/path";
+        let state = create_signed_state(return_to, secret);
+        let wrong_secret = b"wrong-secret";
+        assert_eq!(verify_signed_state(&state, wrong_secret), None);
+    }
+
+    #[test]
+    fn verify_signed_state_rejects_tampered_payload() {
+        let secret = b"secret";
+        let state = create_signed_state("/original", secret);
+        let tampered = format!("e30.{}", state.splitn(2, '.').nth(1).unwrap());
+        assert_eq!(verify_signed_state(&tampered, secret), None);
+    }
+
+    #[test]
+    fn base_url_from_request_uses_host() {
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "example.com".parse().unwrap());
+        assert_eq!(base_url_from_request(&headers), Some("http://example.com".to_string()));
+    }
+
+    #[test]
+    fn base_url_from_request_prefers_x_forwarded() {
+        let mut headers = HeaderMap::new();
+        headers.insert("host", "internal.local".parse().unwrap());
+        headers.insert("x-forwarded-host", "public.example.com".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        assert_eq!(
+            base_url_from_request(&headers),
+            Some("https://public.example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn base_url_from_request_empty_host_none() {
+        let headers = HeaderMap::new();
+        assert_eq!(base_url_from_request(&headers), None);
+    }
+
+    #[test]
+    fn facebook_token_cache_new() {
+        let cache = FacebookTokenCache::new();
+        assert!(std::mem::size_of_val(&cache) > 0);
+    }
+}

@@ -50,3 +50,56 @@ impl IntoResponse for ApiError {
         (status, message).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn api_error_display() {
+        assert_eq!(
+            ApiError::CameraNotFound.to_string(),
+            "Camera not found"
+        );
+        assert_eq!(
+            ApiError::InvalidCredentials.to_string(),
+            "Invalid credentials"
+        );
+        assert_eq!(
+            ApiError::BadRequest("bad".to_string()).to_string(),
+            "Bad request: bad"
+        );
+    }
+
+    #[test]
+    fn api_error_into_response_status_codes() {
+        assert_eq!(
+            ApiError::CameraNotFound.into_response().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            ApiError::PoolMatchNotFound.into_response().status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            ApiError::InvalidCredentials.into_response().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            ApiError::BadRequest("x".to_string()).into_response().status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            ApiError::Forbidden("x".to_string()).into_response().status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[test]
+    fn api_error_from_io() {
+        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let api_err: ApiError = err.into();
+        assert!(api_err.to_string().contains("file not found"));
+    }
+}

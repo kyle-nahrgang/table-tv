@@ -396,6 +396,88 @@ pub fn update_overlay(
     tracing::debug!(camera_id = %camera_id, "update_overlay: done");
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::pool_match::{MatchPlayer, Rating};
+
+    #[test]
+    fn overlay_path_for_camera_sanitizes_name() {
+        let path = overlay_path_for_camera("Camera 1");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-Camera_1.png"));
+    }
+
+    #[test]
+    fn overlay_path_for_camera_allows_alphanumeric_dash_underscore() {
+        let path = overlay_path_for_camera("cam-01_abc");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-cam-01_abc.png"));
+    }
+
+    #[test]
+    fn overlay_path_for_camera_empty_default() {
+        let path = overlay_path_for_camera("");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-default.png"));
+    }
+
+    #[test]
+    fn overlay_path_for_camera_special_chars_become_underscore() {
+        let path = overlay_path_for_camera("cam@home!");
+        assert!(path.to_string_lossy().ends_with("rtmp-overlay-cam_home_.png"));
+    }
+
+    #[test]
+    fn overlay_path_in_data_dir() {
+        let path = overlay_path_for_camera("test");
+        assert!(path.to_string_lossy().contains("data"));
+    }
+
+    #[test]
+    fn overlay_player_from_match_player_apa_rating() {
+        let p = MatchPlayer {
+            name: "Alice".to_string(),
+            race_to: 9,
+            games_won: 3,
+            rating: Some(Rating::Apa(5)),
+        };
+        let overlay = OverlayPlayer::from_match_player(&p);
+        assert_eq!(overlay.name, "Alice");
+        assert_eq!(overlay.rating.as_deref(), Some("APA 5"));
+        assert_eq!(overlay.games_won, 3);
+        assert_eq!(overlay.race_to, 9);
+    }
+
+    #[test]
+    fn overlay_player_from_match_player_fargo_rating() {
+        let p = MatchPlayer {
+            name: "Bob".to_string(),
+            race_to: 7,
+            games_won: 2,
+            rating: Some(Rating::Fargo(650)),
+        };
+        let overlay = OverlayPlayer::from_match_player(&p);
+        assert_eq!(overlay.rating.as_deref(), Some("Fargo 650"));
+    }
+
+    #[test]
+    fn overlay_player_from_match_player_no_rating() {
+        let p = MatchPlayer {
+            name: "Charlie".to_string(),
+            race_to: 5,
+            games_won: 0,
+            rating: None,
+        };
+        let overlay = OverlayPlayer::from_match_player(&p);
+        assert_eq!(overlay.rating, None);
+    }
+
+    #[test]
+    fn overlay_tmp_path_replaces_filename() {
+        let path = std::path::Path::new("data/rtmp-overlay-cam1.png");
+        let tmp = overlay_tmp_path(path);
+        assert_eq!(tmp.file_name().unwrap(), "rtmp-overlay.tmp.png");
+    }
+}
+
 /// Clear the overlay (e.g. when match ends).
 pub fn clear_overlay(
     db: &Db,

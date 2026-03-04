@@ -10,7 +10,6 @@ pub struct ApiServerInfo {
     pub initialized: bool,
     pub version: String,
     pub candidate_version: String,
-
     #[serde(default)]
     pub location_name: String,
     /// True if at least one user has registered (signed in).

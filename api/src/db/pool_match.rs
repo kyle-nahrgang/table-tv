@@ -386,3 +386,131 @@ impl Db {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn match_type_serde_standard() {
+        let mt = MatchType::Standard;
+        let json = serde_json::to_string(&mt).unwrap();
+        assert_eq!(json, "\"standard\"");
+        let parsed: MatchType = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, MatchType::Standard);
+    }
+
+    #[test]
+    fn match_type_serde_practice() {
+        let mt = MatchType::Practice;
+        let json = serde_json::to_string(&mt).unwrap();
+        assert_eq!(json, "\"practice\"");
+        let parsed: MatchType = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, MatchType::Practice);
+    }
+
+    #[test]
+    fn match_type_default() {
+        assert_eq!(MatchType::default(), MatchType::Standard);
+    }
+
+    #[test]
+    fn rating_serde_apa() {
+        let r = Rating::Apa(5);
+        let json = serde_json::to_string(&r).unwrap();
+        let parsed: Rating = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, Rating::Apa(5)));
+    }
+
+    #[test]
+    fn rating_serde_fargo() {
+        let r = Rating::Fargo(650);
+        let json = serde_json::to_string(&r).unwrap();
+        let parsed: Rating = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, Rating::Fargo(650)));
+    }
+
+    #[test]
+    fn parse_match_doc_valid() {
+        let player_one = r#"{"name":"Alice","race_to":9,"games_won":2,"rating":{"Apa":5}}"#;
+        let player_two = r#"{"name":"Bob","race_to":9,"games_won":1,"rating":null}"#;
+        let start_time = "2024-01-15T12:00:00Z";
+        let doc = parse_match_doc(
+            "match-1".to_string(),
+            player_one.to_string(),
+            player_two.to_string(),
+            start_time.to_string(),
+            None,
+            Some("cam-1".to_string()),
+            None,
+            None,
+            None,
+            "[]".to_string(),
+            Some("standard".to_string()),
+        )
+        .unwrap();
+        assert_eq!(doc.id.as_deref(), Some("match-1"));
+        assert_eq!(doc.player_one.name, "Alice");
+        assert_eq!(doc.player_one.games_won, 2);
+        assert_eq!(doc.player_two.name, "Bob");
+        assert_eq!(doc.camera_id, Some("cam-1".to_string()));
+        assert_eq!(doc.match_type, MatchType::Standard);
+    }
+
+    #[test]
+    fn parse_match_doc_practice_type() {
+        let player_one = r#"{"name":"Solo","race_to":0,"games_won":5,"rating":null}"#;
+        let player_two = r#"{"name":"","race_to":0,"games_won":0,"rating":null}"#;
+        let doc = parse_match_doc(
+            "p-1".to_string(),
+            player_one.to_string(),
+            player_two.to_string(),
+            "2024-01-01T00:00:00Z".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            "[]".to_string(),
+            Some("practice".to_string()),
+        )
+        .unwrap();
+        assert_eq!(doc.match_type, MatchType::Practice);
+    }
+
+    #[test]
+    fn parse_match_doc_invalid_json_fails() {
+        let result = parse_match_doc(
+            "id".to_string(),
+            "not valid json".to_string(),
+            r#"{"name":"B","race_to":1,"games_won":0,"rating":null}"#.to_string(),
+            "2024-01-01T00:00:00Z".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            "[]".to_string(),
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_match_doc_invalid_timestamp_fails() {
+        let result = parse_match_doc(
+            "id".to_string(),
+            r#"{"name":"A","race_to":1,"games_won":0,"rating":null}"#.to_string(),
+            r#"{"name":"B","race_to":1,"games_won":0,"rating":null}"#.to_string(),
+            "not-a-date".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            "[]".to_string(),
+            None,
+        );
+        assert!(result.is_err());
+    }
+}

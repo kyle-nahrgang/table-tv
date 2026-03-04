@@ -20,6 +20,38 @@ impl CameraType {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn camera_type_rtsp_is_rtsp() {
+        let ct = CameraType::Rtsp {
+            url: "rtsp://192.168.1.1:554/stream".to_string(),
+        };
+        assert!(ct.is_rtsp());
+        assert_eq!(ct.rtsp_url(), Some("rtsp://192.168.1.1:554/stream"));
+    }
+
+    #[test]
+    fn camera_type_rtsp_url() {
+        let ct = CameraType::Rtsp {
+            url: "rtsp://camera.local/feed".to_string(),
+        };
+        assert_eq!(ct.rtsp_url(), Some("rtsp://camera.local/feed"));
+    }
+
+    #[test]
+    fn camera_type_serde_roundtrip() {
+        let ct = CameraType::Rtsp {
+            url: "rtsp://test".to_string(),
+        };
+        let json = serde_json::to_string(&ct).unwrap();
+        let parsed: CameraType = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, CameraType::Rtsp { url } if url == "rtsp://test"));
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CameraDoc {
     pub id: Option<Id>,
