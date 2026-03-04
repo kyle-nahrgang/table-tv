@@ -26,7 +26,7 @@ jobs:
       # Optional: install dependencies
       - name: Install npm dependencies
         run: npm install
-        working-directory: ./frontend  # change if your npm project is in a subfolder
+        working-directory: ./ui
 
       # Install cargo-deb
       - name: Install cargo-deb
@@ -35,3 +35,4 @@ jobs:
       # Build the Rust project, runs build.rs automatically
       - name: Build .deb package
         run: cargo deb --no-build
+        working-directory: ./api
