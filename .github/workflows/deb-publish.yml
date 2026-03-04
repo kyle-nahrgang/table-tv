@@ -1,0 +1,37 @@
+name: Build and Publish Debian Package
+
+on:
+  push:
+    tags:
+      - 'v*'   # Trigger on version tags like v0.1.0
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rust
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      # Node.js for npm build
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      # Optional: install dependencies
+      - name: Install npm dependencies
+        run: npm install
+        working-directory: ./frontend  # change if your npm project is in a subfolder
+
+      # Install cargo-deb
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      # Build the Rust project, runs build.rs automatically
+      - name: Build .deb package
+        run: cargo deb --no-build
