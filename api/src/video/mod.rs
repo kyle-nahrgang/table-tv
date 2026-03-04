@@ -5,16 +5,10 @@ use tokio::sync::broadcast;
 
 mod mediamtx;
 mod mjpeg;
-mod recording;
-mod overlay;
-mod rtsp_camera;
-mod rtmp;
-mod stream;
+pub(crate) mod overlay;
+pub(crate) mod rtsp_camera;
+pub(crate) mod rtmp;
 
-pub use recording::{recording_download, recording_timeline};
-pub use stream::{
-    camera_stream, camera_stream_rtmp_start, camera_stream_rtmp_stop, camera_stream_rtmp_status,
-};
 pub use overlay::{
     clear_overlay, overlay_path_for_camera, restore_overlay_from_db, spawn_overlay_refresh_task,
     update_overlay, MatchOverlay, OverlayPlayer, OverlayState,

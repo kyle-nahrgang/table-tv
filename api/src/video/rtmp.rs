@@ -4,6 +4,24 @@
 use std::path::Path;
 use std::sync::Arc;
 
+/// Common RTSP input args for FFmpeg. Used by both RTSP camera preview and RTMP pipeline.
+pub(crate) fn rtsp_input_args(rtsp_url: &str) -> Vec<String> {
+    vec![
+        "-rtsp_transport".into(),
+        "udp".into(),
+        "-fflags".into(),
+        "nobuffer".into(),
+        "-flags".into(),
+        "low_delay".into(),
+        "-analyzeduration".into(),
+        "1000000".into(),
+        "-probesize".into(),
+        "1000000".into(),
+        "-i".into(),
+        rtsp_url.to_string(),
+    ]
+}
+
 /// Resolve overlay path for ffmpeg input. Creates parent dir and returns canonical path string.
 pub(crate) fn resolve_overlay_path(overlay_path: &Path) -> Result<String, String> {
     std::fs::create_dir_all(overlay_path.parent().unwrap_or(Path::new(".")))
@@ -172,7 +190,7 @@ fn build_filter_complex_with_overlay_input(
 /// Shared FFmpeg args for RTMP output. Input 0: RTSP (video+audio), Input 1: anullsrc, Input 2: overlay.
 /// Stream selection: -map 0:a uses RTSP audio; anullsrc is fallback when RTSP has no audio.
 fn build_rtmp_args(
-    video_input: &[&str],
+    video_input: &[impl AsRef<str>],
     overlay_path: &str,
     filter_complex: &str,
     encoder: &str,
@@ -180,7 +198,7 @@ fn build_rtmp_args(
     rtmp_url: &str,
 ) -> Vec<String> {
     let mut args: Vec<String> = vec!["-y".into()];
-    args.extend(video_input.iter().map(|s| s.to_string()));
+    args.extend(video_input.iter().map(|s| s.as_ref().to_string()));
     args.extend([
         "-f".into(), "lavfi".into(),
         "-i".into(), "anullsrc=channel_layout=stereo:sample_rate=48000".into(),
@@ -271,15 +289,7 @@ pub fn spawn_rtmp_pipeline(
     ];
     tracing::info!(overlay_path = %overlay_path_str, encoder = %encoder, "RTMP: ffmpeg PNG overlay");
 
-    // Read directly from RTSP. UDP often performs better than TCP for live cameras.
-    let video_input = [
-        "-rtsp_transport", "udp",
-        "-fflags", "nobuffer",
-        "-flags", "low_delay",
-        "-analyzeduration", "1000000",
-        "-probesize", "1000000",
-        "-i", rtsp_url,
-    ];
+    let video_input = rtsp_input_args(rtsp_url);
     let filter = build_filter_complex(location_name, camera_name);
     let output_url = maybe_rewrite_rtmps_for_stunnel(rtmp_url);
     if output_url != rtmp_url {

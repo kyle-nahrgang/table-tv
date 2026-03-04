@@ -36,38 +36,19 @@ fn spawn_rtsp_ffmpeg_with_overlay(
 
     let filter = rtmp::build_filter_complex_for_preview(location_name, camera_name);
 
-    let args = [
-        "-y",
-        "-rtsp_transport",
-        "udp",
-        "-fflags",
-        "nobuffer",
-        "-flags",
-        "low_delay",
-        "-analyzeduration",
-        "1000000",
-        "-probesize",
-        "1000000",
-        "-i",
-        rtsp_url,
-        "-f",
-        "image2",
-        "-loop",
-        "1",
-        "-r",
-        "30",
-        "-i",
-        &overlay_path_str,
-        "-filter_complex",
-        &filter,
-        "-map",
-        "[out]",
-        "-f",
-        "mjpeg",
-        "-q:v",
-        "5",
-        "-",
-    ];
+    let mut args: Vec<String> = vec!["-y".into()];
+    args.extend(rtmp::rtsp_input_args(rtsp_url));
+    args.extend([
+        "-f".into(), "image2".into(),
+        "-loop".into(), "1".into(),
+        "-r".into(), "30".into(),
+        "-i".into(), overlay_path_str,
+        "-filter_complex".into(), filter,
+        "-map".into(), "[out]".into(),
+        "-f".into(), "mjpeg".into(),
+        "-q:v".into(), "5".into(),
+        "-".into(),
+    ]);
 
     let child = Command::new("ffmpeg")
         .args(args)

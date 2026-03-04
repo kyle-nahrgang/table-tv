@@ -11,6 +11,9 @@ use crate::db::camera::CameraType;
 use crate::error::ApiError;
 use crate::video;
 
+mod recordings;
+mod stream;
+
 fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
@@ -176,26 +179,26 @@ pub async fn cameras_delete(
 pub fn routes() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/api/cameras", get(cameras_list).post(cameras_create))
-        .route("/api/cameras/:id/stream", get(video::camera_stream))
+        .route("/api/cameras/:id/stream", get(stream::camera_stream))
         .route(
             "/api/cameras/:id/stream/rtmp",
-            axum::routing::post(video::camera_stream_rtmp_start),
+            axum::routing::post(stream::camera_stream_rtmp_start),
         )
         .route(
             "/api/cameras/:id/stream/rtmp/stop",
-            axum::routing::post(video::camera_stream_rtmp_stop),
+            axum::routing::post(stream::camera_stream_rtmp_stop),
         )
         .route(
             "/api/cameras/:id/stream/rtmp/status",
-            axum::routing::get(video::camera_stream_rtmp_status),
+            axum::routing::get(stream::camera_stream_rtmp_status),
         )
         .route(
             "/api/cameras/:id/recordings/download",
-            axum::routing::get(video::recording_download),
+            axum::routing::get(recordings::recording_download),
         )
         .route(
             "/api/cameras/:id/recordings/timeline",
-            axum::routing::get(video::recording_timeline),
+            axum::routing::get(recordings::recording_timeline),
         )
         .route("/api/cameras/:id", get(cameras_get).put(cameras_update).delete(cameras_delete))
 }
