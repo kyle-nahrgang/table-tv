@@ -57,11 +57,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: deb-amd64
+          path: deb-amd64
 
       - name: Download arm64 .deb
         uses: actions/download-artifact@v4
         with:
           name: deb-arm64
+          path: deb-arm64
 
       - name: Publish Debian repo to gh-pages
         run: |
