@@ -28,14 +28,17 @@ const STATE_TTL_MINUTES: i64 = 10;
 /// Signed OAuth state payload (self-contained, no server storage needed).
 #[derive(Serialize, Deserialize)]
 struct StatePayload {
-    r: String, // return_to
-    t: i64,    // timestamp
+    r: String,  // return_to
+    t: i64,     // timestamp
+    #[serde(default)]
+    d: bool,    // deeplink: use tabletv:// scheme for app callback
 }
 
-fn create_signed_state(return_to: &str, secret: &[u8]) -> String {
+fn create_signed_state(return_to: &str, deeplink: bool, secret: &[u8]) -> String {
     let payload = StatePayload {
         r: return_to.to_string(),
         t: Utc::now().timestamp(),
+        d: deeplink,
     };
     let payload_json = serde_json::to_string(&payload).unwrap();
     let payload_b64 = URL_SAFE_NO_PAD.encode(payload_json.as_bytes());
@@ -46,7 +49,7 @@ fn create_signed_state(return_to: &str, secret: &[u8]) -> String {
     format!("{}.{}", payload_b64, sig_b64)
 }
 
-fn verify_signed_state(state: &str, secret: &[u8]) -> Option<String> {
+fn verify_signed_state(state: &str, secret: &[u8]) -> Option<(String, bool)> {
     let mut parts = state.splitn(2, '.');
     let payload_b64 = parts.next()?;
     let sig_b64 = parts.next()?;
@@ -62,7 +65,7 @@ fn verify_signed_state(state: &str, secret: &[u8]) -> Option<String> {
     if created < expires {
         return None;
     }
-    Some(payload.r)
+    Some((payload.r, payload.d))
 }
 
 /// Derives base URL from request headers (Host, X-Forwarded-Host, X-Forwarded-Proto).
@@ -124,10 +127,28 @@ impl FacebookTokenCache {
     }
 }
 
-/// GET /api/facebook/auth?return_to=... - Starts OAuth flow, redirects to Facebook.
+/// App deeplink redirect URI - used when client requests deeplink to reopen the app.
+const DEEPLINK_REDIRECT_URI: &str = "tabletv://facebook/callback";
+
+/// Deserializes query param as bool: "1", "true" (case-insensitive) → true; "0", "false" → false.
+fn deserialize_deeplink<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    Ok(opt.map(|s| {
+        let s = s.trim();
+        s == "1" || s.eq_ignore_ascii_case("true")
+    }))
+}
+
+/// GET /api/facebook/auth?return_to=...&deeplink=1 - Starts OAuth flow, redirects to Facebook.
 #[derive(Deserialize)]
 pub struct AuthQuery {
     pub return_to: String,
+    /// If 1 or true, use tabletv://facebook/callback so the app reopens instead of the browser.
+    #[serde(default, deserialize_with = "deserialize_deeplink")]
+    pub deeplink: Option<bool>,
 }
 
 pub async fn facebook_auth(
@@ -150,15 +171,21 @@ pub async fn facebook_auth(
         ));
     }
 
+    let deeplink = q.deeplink.unwrap_or(false);
+
     let app_secret = crate::config::config()
         .facebook_app_secret
         .as_ref()
         .filter(|s| !s.is_empty())
         .cloned()
         .ok_or_else(|| ApiError::BadRequest("Facebook OAuth not configured. Set facebook.app_secret.".to_string()))?;
-    let state = create_signed_state(return_to, app_secret.as_bytes());
+    let state = create_signed_state(return_to, deeplink, app_secret.as_bytes());
 
-    let redirect_uri = format!("{}/facebook/callback", base_url.trim_end_matches('/'));
+    let redirect_uri = if deeplink {
+        DEEPLINK_REDIRECT_URI.to_string()
+    } else {
+        format!("{}/facebook/callback", base_url.trim_end_matches('/'))
+    };
     let auth_url = format!(
         "{}?client_id={}&redirect_uri={}&scope={}&state={}",
         OAUTH_DIALOG,
@@ -192,7 +219,7 @@ pub async fn facebook_exchange_code(
         .filter(|s| !s.is_empty())
         .cloned()
         .ok_or_else(|| ApiError::BadRequest("Facebook OAuth not configured. Set facebook.app_secret.".to_string()))?;
-    let return_to =
+    let (return_to, use_deeplink) =
         verify_signed_state(req.state.trim(), app_secret.as_bytes()).ok_or_else(|| {
             tracing::warn!(
                 state_len = req.state.len(),
@@ -213,9 +240,13 @@ pub async fn facebook_exchange_code(
         .filter(|s| !s.is_empty())
         .cloned()
         .ok_or_else(|| ApiError::BadRequest("Facebook OAuth not configured. Set facebook.app_secret.".to_string()))?;
-    let base_url = resolve_base_url(&headers)?;
 
-    let redirect_uri = format!("{}/facebook/callback", base_url.trim_end_matches('/'));
+    let redirect_uri = if use_deeplink {
+        DEEPLINK_REDIRECT_URI.to_string()
+    } else {
+        let base_url = resolve_base_url(&headers)?;
+        format!("{}/facebook/callback", base_url.trim_end_matches('/'))
+    };
 
     let token_url = format!(
         "{}/oauth/access_token?client_id={}&client_secret={}&redirect_uri={}&code={}",
@@ -293,7 +324,8 @@ pub async fn facebook_status(
         .map(|b| format!("{}/facebook/callback", b.trim_end_matches('/')));
     Ok(Json(serde_json::json!({
         "configured": configured,
-        "redirect_uri": redirect_uri
+        "redirect_uri": redirect_uri,
+        "app_redirect_uri": DEEPLINK_REDIRECT_URI
     })))
 }
 
@@ -437,19 +469,19 @@ mod tests {
     fn create_and_verify_signed_state_roundtrip() {
         let secret = b"test-secret-key";
         let return_to = "/admin/settings";
-        let state = create_signed_state(return_to, secret);
+        let state = create_signed_state(return_to, false, secret);
         assert!(state.contains('.'));
         let parts: Vec<&str> = state.splitn(2, '.').collect();
         assert_eq!(parts.len(), 2);
         let verified = verify_signed_state(&state, secret);
-        assert_eq!(verified, Some(return_to.to_string()));
+        assert_eq!(verified, Some((return_to.to_string(), false)));
     }
 
     #[test]
     fn verify_signed_state_rejects_wrong_secret() {
         let secret = b"correct-secret";
         let return_to = "/path";
-        let state = create_signed_state(return_to, secret);
+        let state = create_signed_state(return_to, false, secret);
         let wrong_secret = b"wrong-secret";
         assert_eq!(verify_signed_state(&state, wrong_secret), None);
     }
@@ -457,7 +489,7 @@ mod tests {
     #[test]
     fn verify_signed_state_rejects_tampered_payload() {
         let secret = b"secret";
-        let state = create_signed_state("/original", secret);
+        let state = create_signed_state("/original", false, secret);
         let tampered = format!("e30.{}", state.splitn(2, '.').nth(1).unwrap());
         assert_eq!(verify_signed_state(&tampered, secret), None);
     }

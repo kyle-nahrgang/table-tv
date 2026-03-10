@@ -9,6 +9,7 @@ export function ServerSettings() {
   const { refetch, version, candidateVersion } = useApiInfo()
   const [facebookConfigured, setFacebookConfigured] = useState(false)
   const [facebookRedirectUri, setFacebookRedirectUri] = useState('')
+  const [facebookAppRedirectUri, setFacebookAppRedirectUri] = useState('')
   const [loading, setLoading] = useState(true)
   const [locationName, setLocationName] = useState('')
   const [locationNameSaving, setLocationNameSaving] = useState(false)
@@ -33,6 +34,7 @@ export function ServerSettings() {
         if (!cancelled) {
           setFacebookConfigured(fbStatus.configured)
           setFacebookRedirectUri(fbStatus.redirect_uri || '')
+          setFacebookAppRedirectUri(fbStatus.app_redirect_uri || '')
           setLocationName(settings.location_name || '')
           setRecordPath(settings.record_path || '')
           setRecordSegmentDuration(settings.record_segment_duration || '1m')
@@ -272,6 +274,16 @@ export function ServerSettings() {
                 <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1, overflow: 'auto', fontSize: '0.875rem' }}>
                   {facebookRedirectUri || '(loading…)'}
                 </Box>
+                {facebookAppRedirectUri && (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                      <strong>For the mobile app</strong> (deeplink to reopen app), also add:
+                    </Typography>
+                    <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1, overflow: 'auto', fontSize: '0.875rem', mt: 0.5 }}>
+                      {facebookAppRedirectUri}
+                    </Box>
+                  </>
+                )}
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   The URI must match exactly. After saving, the stream will appear on your Facebook profile when you go live.
                 </Typography>
